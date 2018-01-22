@@ -84,11 +84,22 @@ oo::class create Result {
     method _uniintdif {op rr} {
         # distinct union, intersect, or difference
         # non-distinct union-all
+        # TODO problem: set operations probably can't be relied on to preserve row order
+        # TODO why does the test result specify reverse row order?
         set fields [my getFieldNames]
         set a [my getData]
         set b [$rr getData]
         set rows [if {$op eq "union-all"} {
             concat $a $b
+        } elseif {   0   &&   $op eq "union"} {
+            set union {}
+            foreach row $a {
+                dict set union $row 1
+            }
+            foreach row $b {
+                dict set union $row 1
+            }
+            dict keys $union
         } else {
             ::struct::set $op $a $b
         }]
