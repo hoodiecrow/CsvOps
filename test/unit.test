@@ -1,0 +1,2527 @@
+package require tcltest
+
+::tcltest::configure {*}$argv
+
+::tcltest::testConstraint skip 0
+::tcltest::testConstraint noskip 1
+foreach unit {
+    utils_dbjoin colschecker commands_constrain commands_convDateFmt
+    commands_segment commands_stringNormalize handleOptions
+    processor_getRow processor_get reader_rows reader_getColumn
+    reader_getColumnValues rowschecker presentation_addHeader
+    presentation_addRow presentation_get presentation_set presentation_incr
+    presentation_getRow presentation_getColumn presentation_rows
+    presentation_columns presentation_toDOM presentation_asLoL
+    presentation_toMatrix presentation_tally presentation_lookupColumn
+    presentationwriter_write utils_anon utils_cols utils_getFirstLine
+    utils_getdiag utils_dayDistance utils_round utils_serialCompareEqual
+    utils_serialCompareEqualDecimal utils_serialCompareEmpty utils_yearDistance
+    utils_getdiag_a validator_validate validator_oneOf validator_notOneOf
+    validator_matches validator_matchesOrIsEmpty validator_belongsTo
+    logging_setLabel logging_addMessage
+    
+    result_create result_setFieldNames result_getFieldNames result_getData
+    result_union result_intersect result_except result_union_all
+    result_distinct result_unique result_limit result_order_by result_select
+    result_read
+    
+    view_create view_set_header view_getFieldNames view_get_rows view_union
+    view_except view_intersect view_union_all view_distinct view_unique
+    view_range view_order_by view_select view_filter view_read view_rowid
+} {
+    ::tcltest::testConstraint $unit 1
+}
+
+::tcltest::loadTestedCommands
+
+source [file join $::env(USERPROFILE) starkits csvops.kit]
+foreach file [glob -dir [file join $starkit::topdir ssrc] *.tcl] {
+    source $file
+}
+namespace import ::msgcat::mc
+::msgcat::mclocale sv
+::msgcat::mcload [file join $::starkit::topdir msgs]
+#::msgcat::mcload [file join $::starkit::topdir .. msgs]
+
+set ::options(-separator) \;
+
+interp alias {} ::log {} ::csvops::log
+
+# NOTE viewFile suppresses ending newline
+
+
+::tcltest::test colschecker-1.0 {} -constraints {noskip colschecker} -setup {
+} -body {
+    colsCheck \
+        [colsCheckMake {}] \
+        {a b c d e f g h i j k l m}
+} -cleanup {
+} -result {a b c d e f g h i j k l m}
+
+
+::tcltest::test colschecker-1.1 {} -constraints {noskip colschecker} -setup {
+} -body {
+    colsCheck \
+        [colsCheckMake :5] \
+        {a b c d e f g h i j k l m}
+} -cleanup {
+} -result {a b c d e f}
+
+
+::tcltest::test colschecker-1.2 {} -constraints {noskip colschecker} -setup {
+} -body {
+    colsCheck \
+        [colsCheckMake {:5 :3}] \
+        {a b c d e f g h i j k l m}
+} -cleanup {
+} -result {a b c d e f a b c d}
+
+
+::tcltest::test colschecker-1.3 {} -constraints {noskip colschecker} -setup {
+} -body {
+    colsCheck \
+        [colsCheckMake {:5 1 0}] \
+        {a b c d e f g h i j k l m}
+} -cleanup {
+} -result {a b c d e f b a}
+
+
+::tcltest::test colschecker-1.4 {} -constraints {noskip colschecker} -setup {
+} -body {
+    colsCheck \
+        [colsCheckMake {7:}] \
+        {a b c d e f g h i j k l m}
+} -cleanup {
+} -result {h i j k l m}
+
+
+::tcltest::test utils_dbjoin-1.0 {inner join} -constraints utils_dbjoin -setup {
+    set r [Reader new -fields {foo bar}]
+    set s [Reader new -fields {foo bar}]
+    ::tcltest::makeFile "0;foo\n1;snarf\n2;blue" a.csv
+    ::tcltest::makeFile "0;bagel\n1;snatz\n3;driver" b.csv
+    $r read [file join [::tcltest::configure -tmpdir] a.csv]
+    $s read [file join [::tcltest::configure -tmpdir] b.csv]
+    set w [Writer new -fields {foo bar}]
+    ::tcltest::makeFile {} output.csv
+} -body {
+    dbjoin $r $s $w
+    $w write [file join [::tcltest::configure -tmpdir] output.csv]
+    ::tcltest::viewFile [file join [::tcltest::configure -tmpdir] output.csv]
+} -cleanup {
+    $r destroy
+    $s destroy
+    $w destroy
+} -result {0;foo;0;bagel
+1;snarf;1;snatz}
+
+
+::tcltest::test utils_dbjoin-1.1 {inner join (explicit)} -constraints utils_dbjoin -setup {
+    set r [Reader new -fields {foo bar}]
+    set s [Reader new -fields {foo bar}]
+    ::tcltest::makeFile "0;foo\n1;snarf\n2;blue" a.csv
+    ::tcltest::makeFile "0;bagel\n1;snatz\n3;driver" b.csv
+    $r read [file join [::tcltest::configure -tmpdir] a.csv]
+    $s read [file join [::tcltest::configure -tmpdir] b.csv]
+    set w [Writer new -fields {foo bar}]
+    ::tcltest::makeFile {} output.csv
+} -body {
+    dbjoin inner $r $s $w
+    $w write [file join [::tcltest::configure -tmpdir] output.csv]
+    ::tcltest::viewFile [file join [::tcltest::configure -tmpdir] output.csv]
+} -cleanup {
+    $r destroy
+    $s destroy
+    $w destroy
+} -result {0;foo;0;bagel
+1;snarf;1;snatz}
+
+
+::tcltest::test utils_dbjoin-1.2 {left outer join} -constraints utils_dbjoin -setup {
+    set r [Reader new -fields {foo bar}]
+    set s [Reader new -fields {foo bar}]
+    ::tcltest::makeFile "0;foo\n1;snarf\n2;blue" a.csv
+    ::tcltest::makeFile "0;bagel\n1;snatz\n3;driver" b.csv
+    $r read [file join [::tcltest::configure -tmpdir] a.csv]
+    $s read [file join [::tcltest::configure -tmpdir] b.csv]
+    set w [Writer new -fields {foo bar}]
+    ::tcltest::makeFile {} output.csv
+} -body {
+    dbjoin left $r $s $w
+    $w write [file join [::tcltest::configure -tmpdir] output.csv]
+    ::tcltest::viewFile [file join [::tcltest::configure -tmpdir] output.csv]
+} -cleanup {
+    $r destroy
+    $s destroy
+    $w destroy
+} -result {0;foo;0;bagel
+1;snarf;1;snatz
+2;blue;;}
+
+
+::tcltest::test utils_dbjoin-1.3 {right outer join} -constraints utils_dbjoin -setup {
+    set r [Reader new -fields {foo bar}]
+    set s [Reader new -fields {foo bar}]
+    ::tcltest::makeFile "0;foo\n1;snarf\n2;blue" a.csv
+    ::tcltest::makeFile "0;bagel\n1;snatz\n3;driver" b.csv
+    $r read [file join [::tcltest::configure -tmpdir] a.csv]
+    $s read [file join [::tcltest::configure -tmpdir] b.csv]
+    set w [Writer new -fields {foo bar}]
+    ::tcltest::makeFile {} output.csv
+} -body {
+    dbjoin right $r $s $w
+    $w write [file join [::tcltest::configure -tmpdir] output.csv]
+    ::tcltest::viewFile [file join [::tcltest::configure -tmpdir] output.csv]
+} -cleanup {
+    $r destroy
+    $s destroy
+    $w destroy
+} -result {0;foo;0;bagel
+1;snarf;1;snatz
+;;3;driver}
+
+
+::tcltest::test utils_dbjoin-1.4 {full outer join} -constraints utils_dbjoin -setup {
+    set r [Reader new -fields {foo bar}]
+    set s [Reader new -fields {foo bar}]
+    ::tcltest::makeFile "0;foo\n1;snarf\n2;blue" a.csv
+    ::tcltest::makeFile "0;bagel\n1;snatz\n3;driver" b.csv
+    $r read [file join [::tcltest::configure -tmpdir] a.csv]
+    $s read [file join [::tcltest::configure -tmpdir] b.csv]
+    set w [Writer new -fields {foo bar}]
+    ::tcltest::makeFile {} output.csv
+} -body {
+    dbjoin full $r $s $w
+    $w write [file join [::tcltest::configure -tmpdir] output.csv]
+    ::tcltest::viewFile [file join [::tcltest::configure -tmpdir] output.csv]
+} -cleanup {
+    $r destroy
+    $s destroy
+    $w destroy
+} -result {0;foo;0;bagel
+1;snarf;1;snatz
+2;blue;;
+;;3;driver}
+
+
+::tcltest::test utils_dbjoin-1.5 {argument error} -constraints utils_dbjoin -setup {
+    set r [Reader new -fields {foo bar}]
+    set s [Reader new -fields {foo bar}]
+    set w [Writer new -fields {foo bar}]
+} -body {
+    dbjoin full $r $s $w foo
+} -cleanup {
+    $r destroy
+    $s destroy
+    $w destroy
+} -match glob -result {fel antal argument till dbjoin} -returnCodes error
+
+
+::tcltest::test commands_constrain-1.0 {constrain:} -constraints {commands_constrain} -setup {
+} -body {
+    # decl: constrain {varName args}
+    set a 17
+    constrain a -integer 15 20
+    set b 17
+    constrain b -integer 20 25
+    set c 17
+    constrain c -integer 10 15
+    set d 17
+    constrain d -integer 10
+    list $a $b $c $d
+} -cleanup {
+    unset a b c d
+} -result {17 20 15 17}
+
+
+::tcltest::test commands_convDateFmt-1.0 {convDateFmt: defaults} -constraints {commands_convDateFmt} -setup {
+} -body {
+    # decl: convDateFmt {varName args}
+    set a 2013-06-25
+    convDateFmt a
+    set a
+} -cleanup {
+    unset a
+} -result 13-06-25
+
+
+::tcltest::test commands_convDateFmt-1.1 {convDateFmt: defaults} -constraints {commands_convDateFmt} -setup {
+} -body {
+    # decl: convDateFmt {varName args}
+    set a 13-06-25
+    convDateFmt a
+    set a
+} -cleanup {
+    unset a
+} -match glob -result {felaktigt datumformat f*r -from} -returnCodes error
+
+
+::tcltest::test commands_convDateFmt-1.2 {convDateFmt: garbage output} -constraints {commands_convDateFmt} -setup {
+} -body {
+    # decl: convDateFmt {varName args}
+    set a 2013-06-25
+    convDateFmt a -to %f
+    set a
+} -cleanup {
+    unset a
+} -result %f
+
+
+::tcltest::test commands_convDateFmt-1.3 {convDateFmt: } -constraints {commands_convDateFmt} -setup {
+} -body {
+    # decl: convDateFmt {varName args}
+    set a 13-06-25
+    convDateFmt a -from %y-%m-%d -to %Y=%m=%d
+    set a
+} -cleanup {
+    unset a
+} -result 2013=06=25
+
+
+::tcltest::test commands_convDateFmt-1.4 {convDateFmt: } -constraints {commands_convDateFmt} -setup {
+} -body {
+    # decl: convDateFmt {varName args}
+    set a {}
+    convDateFmt a -default foobar
+    set a
+} -cleanup {
+    unset a
+} -result foobar
+
+
+::tcltest::test commands_segment-1.0 {segment:} -constraints {commands_segment} -setup {
+} -body {
+    # decl: segment {varName args}
+    set a 17
+    segment a 15 20
+    set b 17
+    segment b 20 25
+    set c 17
+    segment c 10 15
+    set d 17
+    segment d 10
+    list $a $b $c $d
+} -cleanup {
+    unset a b c d
+} -result {16_20 0_20 16_ 11_}
+
+
+::tcltest::test commands_stringNormalize-1.0 {stringNormalize:} -constraints {commands_stringNormalize} -setup {
+} -body {
+    # decl: stringNormalize {varName {ops trim}}
+    set a { abc def  }
+    stringNormalize a
+    set b { abc def  }
+    stringNormalize b toupper
+    set c { abc def  }
+    stringNormalize c {trim totitle}
+    list $a $b $c
+} -cleanup {
+    unset a b c
+} -result {{abc def} { ABC DEF  } {Abc def}}
+
+
+unset -nocomplain options
+
+
+::tcltest::test handleOptions-1.0 {handleOptions:} -constraints handleOptions -setup {
+    set foo {}
+} -body {
+    # decl: handleOptions args
+    set args [::csvops::handleOptions]
+    list $args [array get options]
+} -cleanup {
+    unset foo
+} -result {{} {}}
+
+
+::tcltest::test handleOptions-1.1 {handleOptions:} -constraints handleOptions -setup {
+    set foo {}
+} -body {
+    # decl: handleOptions args
+    set args [::csvops::handleOptions -variable foo {foo bar}]
+    list $args [array get options]
+} -cleanup {
+    unset foo
+} -result {{foo bar} {}}
+
+
+::tcltest::test handleOptions-1.2 {handleOptions:} -constraints handleOptions -setup {
+    set foo {}
+} -body {
+    # decl: handleOptions args
+    set args [::csvops::handleOptions -variable foo {-- -foo}]
+    list $args [array get foo]
+} -cleanup {
+    unset foo
+} -result {-foo {}}
+
+
+::tcltest::test handleOptions-1.3 {handleOptions:} -constraints handleOptions -setup {
+    set foo {}
+} -body {
+    # decl: handleOptions args
+    set args [::csvops::handleOptions -variable foo {-foo}]
+    list $args [array get foo]
+} -cleanup {
+    unset foo
+} -match glob -result {-foo} -returnCodes error
+
+
+::tcltest::test handleOptions-1.4 {handleOptions:} -constraints handleOptions -setup {
+    set foo {}
+} -body {
+    # decl: handleOptions args
+    set args [::csvops::handleOptions -variable foo -error {m {mc {unknown option %s} $m}} {-foo}]
+    list $args [array get foo]
+} -cleanup {
+    unset foo
+} -match glob -result {ok*nt tillval "-foo"} -returnCodes error
+
+
+::tcltest::test handleOptions-1.5 {handleOptions:} -constraints handleOptions -setup {
+    array set options {-alternate 0 -rows : -cols {} -separator \; -expand auto -fields {}}
+} -body {
+    # decl: handleOptions args
+    set args [::csvops::handleOptions -variable options -flags -alternate -extra -oseparator {-rows a -cols b -separator c -oseparator d -expand auto -fields e -alternate -- -foo}]
+    list $args [lmap name [lsort -dictionary [array names options]] {list $name $options($name)}]
+} -cleanup {
+    unset options
+} -result {-foo {{-alternate 1} {-cols b} {-expand auto} {-fields e} {-oseparator d} {-rows a} {-separator c}}}
+
+
+::tcltest::test handleOptions-1.6 {handleOptions:} -constraints handleOptions -setup {
+    array set options {-alternate 0 -rows : -cols {} -separator \; -expand auto -fields {}}
+} -body {
+    # decl: handleOptions args
+    set args [::csvops::handleOptions -variable options -flags -alternate -extra -oseparator {-r a -c b -s c -o d -e a -f e -a -- -foo}]
+    list $args [lmap name [lsort -dictionary [array names options]] {list $name $options($name)}]
+} -cleanup {
+    unset options
+} -result {-foo {{-alternate 1} {-cols b} {-expand auto} {-fields e} {-oseparator d} {-rows a} {-separator c}}}
+
+unset -nocomplain options
+
+::tcltest::test processor_getRow-1.0 {get:} -constraints {processor_getRow} -setup {
+    set r [Reader new -fields {foo bar baz}]
+    set s [Reader new -fields {foo bar baz}]
+    ::tcltest::makeFile "1;a;\n2;b;29\n3;c;23" foobar.csv
+    ::tcltest::makeFile "1;a;83\n2;b;29\n4;c;" bazqux.csv
+    $s read [file join [::tcltest::configure -tmpdir] foobar.csv]
+    $r read [file join [::tcltest::configure -tmpdir] bazqux.csv]
+} -body {
+    # decl: getRow varName row
+    $s getRow F 1
+    $r getRow G 1
+    list $F(foo) $G(foo)
+} -cleanup {
+    $r destroy
+    $s destroy
+    unset F G
+} -result {1 1}
+
+
+::tcltest::test processor_get-1.0 {get:} -constraints {noskip processor_get} -setup {
+    set p [Reader new -fields {a b c d}]
+    set m [::struct::matrix]
+    $m add columns 4
+    $m add row {1 2 3 4}
+    $m add row {5 6 7 8}
+    set res {}
+    $p import $m
+} -body {
+    # decl: get script
+    $p get {
+        lappend res $F(c)
+    }
+    set res
+} -cleanup {
+    $p destroy
+    unset res m F
+} -result {3 7}
+
+
+::tcltest::test reader_rows-1.0 {rows:} -constraints {noskip reader_rows} -setup {
+    set r [Reader new]
+    set m [::struct::matrix]
+    $m add columns 4
+    $m add row {1 2 3 4}
+    $m add row {5 6 7 8}
+    $r import $m
+} -body {
+    # decl: rows {}
+    # database has 2 rows
+    $r rows
+} -cleanup {
+    $r destroy
+    unset m
+} -result 2
+
+
+::tcltest::test reader_getColumn-1.0 {getColumn:} -constraints {noskip reader_getColumn} -setup {
+    set p [Reader new -fields {a b c d}]
+    set m [::struct::matrix]
+    $m add columns 4
+    $m add row {1 2 3 4}
+    $m add row {5 6 7 8}
+    $p import $m
+} -body {
+    # decl: getColumn varName field
+    $p getColumn C c
+    set C
+} -cleanup {
+    $p destroy
+    unset m
+} -result {3 7}
+
+
+::tcltest::test reader_getColumn-2.0 {getColumn: compare columns for equality} -constraints {reader_getColumn} -setup {
+    set r [Reader new -fields {foo bar baz}]
+    set s [Reader new -fields {foo bar baz}]
+    ::tcltest::makeFile "1;a;\n2;b;29\n3;c;23" foobar.csv
+    ::tcltest::makeFile "1;a;83\n2;b;29\n4;c;" bazqux.csv
+    $s read [file join [::tcltest::configure -tmpdir] foobar.csv]
+    $r read [file join [::tcltest::configure -tmpdir] bazqux.csv]
+} -body {
+    # decl: getColumn varName field
+    $r getColumn C foo
+    $s getColumn D foo
+    $r getColumn E bar
+    $s getColumn F bar
+    list [expr {$C == $D}] [expr {$E == $F}]
+} -cleanup {
+    $r destroy
+    $s destroy
+    unset C D E F
+} -result {0 1}
+
+
+::tcltest::test reader_getColumn-2.1 {getColumn: compare columns for numeric difference} -constraints {reader_getColumn} -setup {
+    set r [Reader new -fields {foo bar baz}]
+    set s [Reader new -fields {foo bar baz}]
+    ::tcltest::makeFile "1;a;\n2;b;29\n3;c;23" foobar.csv
+    ::tcltest::makeFile "1;a;83\n2;b;29\n4;c;" bazqux.csv
+    $s read [file join [::tcltest::configure -tmpdir] foobar.csv]
+    $r read [file join [::tcltest::configure -tmpdir] bazqux.csv]
+} -body {
+    # decl: getColumn varName field
+    $r getColumn C1 foo
+    $s getColumn C2 foo
+    set s1 [::tcl::mathop::+ {*}$C1]
+    set s2 [::tcl::mathop::+ {*}$C2]
+    expr {$s1 - $s2}
+} -cleanup {
+    $r destroy
+    $s destroy
+    unset s1 s2
+} -result 1
+
+
+::tcltest::test reader_getColumn-2.2 {getColumn: compare columns for numeric difference, with empty cells} -constraints {reader_getColumn} -setup {
+    set r [Reader new -fields {foo bar baz}]
+    set s [Reader new -fields {foo bar baz}]
+    ::tcltest::makeFile "1;a;\n2;b;29\n3;c;23" foobar.csv
+    ::tcltest::makeFile "1;a;83\n2;b;29\n4;c;" bazqux.csv
+    $r read [file join [::tcltest::configure -tmpdir] foobar.csv]
+    $s read [file join [::tcltest::configure -tmpdir] bazqux.csv]
+} -body {
+    # decl: getColumn varName field
+    set s1 0
+    $r getColumn C1 baz
+    foreach v $C1 {
+        if {$v eq {}} continue
+        incr s1 $v
+    }
+    set s2 0
+    $s getColumn C2 baz
+    foreach v $C2 {
+        if {$v eq {}} continue
+        incr s2 $v
+    }
+    expr {$s1 - $s2}
+} -cleanup {
+    $r destroy
+    $s destroy
+    unset s1 s2 v
+} -result -60
+
+
+::tcltest::test reader_getColumn-2.3 {getColumn: compare columns for numeric difference, decimal numbers} -constraints {reader_getColumn} -setup {
+    set r [Reader new -fields {foo bar baz qux}]
+    set s [Reader new -fields {foo bar baz qux}]
+    ::tcltest::makeFile "1;a;;1,67\n2;b;29;2,05\n3;c;23;3" foobar.csv
+    ::tcltest::makeFile "1;a;83;0,68\n2;b;29;4,12\n4;c;;1,05" bazqux.csv
+    $r read [file join [::tcltest::configure -tmpdir] foobar.csv]
+    $s read [file join [::tcltest::configure -tmpdir] bazqux.csv]
+} -body {
+    # decl: getColumn varName field
+    set s1 0
+    $r getColumn C1 qux
+    foreach v $C1 {
+        if {$v eq {}} continue
+        commaToDot v
+        set s1 [expr {$s1 + $v}]
+    }
+    set s2 0
+    $s getColumn C2 qux
+    foreach v $C2 {
+        if {$v eq {}} continue
+        commaToDot v
+        set s2 [expr {$s2 + $v}]
+    }
+    expr {$s1 - $s2}
+} -cleanup {
+    $r destroy
+    $s destroy
+    unset s1 s2 v
+} -result 0.8700000000000001
+
+
+::tcltest::test reader_getColumn-2.4 {getColumn: serial comparison for equality -- integer} -constraints {reader_getColumn} -setup {
+    set r [Reader new -fields {foo bar baz qux}]
+    set s [Reader new -fields {foo bar baz qux}]
+    ::tcltest::makeFile "1;a;;1,67\n2;b;29;2,05\n3;c;23;3" foobar.csv
+    ::tcltest::makeFile "1;a;83;0,68\n2;b;29;4,12\n4;c;;1,05" bazqux.csv
+    $r read [file join [::tcltest::configure -tmpdir] foobar.csv]
+    $s read [file join [::tcltest::configure -tmpdir] bazqux.csv]
+} -body {
+    # decl: getColumn varName field
+    serialCompareEqual [$r getColumn C1 foo] [$s getColumn C2 foo]
+} -cleanup {
+    $r destroy
+    $s destroy
+} -result {1 1 0}
+
+
+::tcltest::test reader_getColumn-2.5 {getColumn: serial comparison for equality -- string} -constraints {reader_getColumn} -setup {
+    set r [Reader new -fields {foo bar baz qux}]
+    set s [Reader new -fields {foo bar baz qux}]
+    ::tcltest::makeFile "1;a;;1,67\n2;b;29;2,05\n3;c;23;3" foobar.csv
+    ::tcltest::makeFile "1;a;83;0,68\n2;b;29;4,12\n4;c;;1,05" bazqux.csv
+    $r read [file join [::tcltest::configure -tmpdir] foobar.csv]
+    $s read [file join [::tcltest::configure -tmpdir] bazqux.csv]
+} -body {
+    # decl: getColumn varName field
+    serialCompareEqual [$r getColumn C1 bar] [$s getColumn C2 bar]
+} -cleanup {
+    $r destroy
+    $s destroy
+} -result {1 1 1}
+
+
+::tcltest::test reader_getColumn-2.6 {getColumn: serial comparison for equality -- decimal} -constraints {reader_getColumn} -setup {
+    set r [Reader new -fields {foo bar baz qux}]
+    set s [Reader new -fields {foo bar baz qux}]
+    ::tcltest::makeFile "1;a;;1,67\n2;b;29;2,05\n3;c;23;1,0500" foobar.csv
+    ::tcltest::makeFile "1;a;83;0,68\n2;b;29;4,12\n4;c;;1,05" bazqux.csv
+    $r read [file join [::tcltest::configure -tmpdir] foobar.csv]
+    $s read [file join [::tcltest::configure -tmpdir] bazqux.csv]
+} -body {
+    # decl: getColumn varName field
+    serialCompareEqualDecimal [$r getColumn C1 qux] [$s getColumn C2 qux]
+} -cleanup {
+    $r destroy
+    $s destroy
+} -result {0 0 1}
+
+
+::tcltest::test reader_getColumnValues-1.0 {getColumnValues:} -constraints {noskip reader_getColumnValues} -setup {
+    set p [Reader new -fields {a b c d}]
+    set m [::struct::matrix]
+    $m add columns 4
+    $m add row {1 2 3 4}
+    $m add row {5 6 {} 8}
+    $p import $m
+} -body {
+    # decl: getColumnValues varName field
+    $p getColumnValues C c
+    set C
+} -cleanup {
+    $p destroy
+    unset m
+} -result 3
+
+
+::tcltest::test reader_getColumnValues-1.1 {getColumnValues:} -constraints {noskip reader_getColumnValues} -setup {
+    set p [Reader new -fields {a b c d}]
+    set m [::struct::matrix]
+    $m add columns 4
+    $m add row {1 2 3 4}
+    $m add row {5 6 {} 8}
+    $p import $m
+} -body {
+    # decl: getColumnValues varName field
+    $p getColumnValues C c 0
+    set C
+} -cleanup {
+    $p destroy
+    unset m
+} -result {3 0}
+
+
+::tcltest::test rowschecker-1.0 {} -constraints {noskip rowschecker} -setup {
+    ::tcltest::makeFile {aa;bb;cc
+dd;ee;ff
+gg;hh;ii
+åäö;"b;c"
+} foo.csv
+    ::tcltest::makeFile {} bar.csv
+    set f [open [file join [tcltest::temporaryDirectory] foo.csv]]
+    set g [open [file join [tcltest::temporaryDirectory] bar.csv] w]
+} -body {
+    set cex [rowsCheckMake :3]
+    set rownum 0
+    while {[gets $f line] >= 0} {
+        if {[rowsCheck $cex [incr rownum]]} {
+            chan puts $g $line
+        }
+    }
+    chan close $g ; unset g
+    ::tcltest::viewFile bar.csv
+} -cleanup {
+    chan close $f ; unset f
+    unset cex rownum
+} -result {aa;bb;cc
+dd;ee;ff
+gg;hh;ii}
+
+
+::tcltest::test rowschecker-1.1 {} -constraints {noskip rowschecker} -setup {
+    ::tcltest::makeFile {aa;bb;cc
+dd;ee;ff
+gg;hh;ii
+åäö;"b;c"} foo.csv
+    ::tcltest::makeFile {} bar.csv
+    set f [open [file join [tcltest::temporaryDirectory] foo.csv]]
+    set g [open [file join [tcltest::temporaryDirectory] bar.csv] w]
+} -body {
+    set cex [rowsCheckMake 2:3]
+    set rownum 0
+    while {[gets $f line] >= 0} {
+        if {[rowsCheck $cex [incr rownum]]} {
+            chan puts $g $line
+        }
+    }
+    chan close $g ; unset g
+    ::tcltest::viewFile bar.csv
+} -cleanup {
+    chan close $f ; unset f
+    unset cex rownum
+} -result {dd;ee;ff
+gg;hh;ii}
+
+
+::tcltest::test rowschecker-1.2 {} -constraints {noskip rowschecker} -setup {
+    ::tcltest::makeFile {aa;bb;cc
+dd;ee;ff
+gg;hh;ii
+åäö;"b;c"} foo.csv
+    ::tcltest::makeFile {} bar.csv
+    set f [open [file join [tcltest::temporaryDirectory] foo.csv]]
+    set g [open [file join [tcltest::temporaryDirectory] bar.csv] w]
+} -body {
+    set cex [rowsCheckMake 2:]
+    set rownum 0
+    while {[gets $f line] >= 0} {
+        if {[rowsCheck $cex [incr rownum]]} {
+            chan puts $g $line
+        }
+    }
+    chan close $g ; unset g
+    ::tcltest::viewFile bar.csv
+} -cleanup {
+    chan close $f ; unset f
+    unset cex rownum
+} -cleanup {
+} -result {dd;ee;ff
+gg;hh;ii
+åäö;"b;c"}
+
+
+::tcltest::test rowschecker-1.3 {} -constraints {noskip rowschecker} -setup {
+    ::tcltest::makeFile {aa;bb;cc
+dd;ee;ff
+gg;hh;ii
+åäö;"b;c"} foo.csv
+    ::tcltest::makeFile {} bar.csv
+    set f [open [file join [tcltest::temporaryDirectory] foo.csv]]
+    set g [open [file join [tcltest::temporaryDirectory] bar.csv] w]
+} -body {
+    set cex [rowsCheckMake :]
+    set rownum 0
+    while {[gets $f line] >= 0} {
+        if {[rowsCheck $cex [incr rownum]]} {
+            chan puts $g $line
+        }
+    }
+    chan close $g ; unset g
+    ::tcltest::viewFile bar.csv
+} -cleanup {
+    chan close $f ; unset f
+    unset cex rownum
+} -cleanup {
+} -result {aa;bb;cc
+dd;ee;ff
+gg;hh;ii
+åäö;"b;c"}
+
+
+::tcltest::test presentation_addHeader-1.0 {addHeader:} -constraints {presentation_addHeader} -setup {
+} -body {
+    # decl: addHeader {_label args}
+    set t [Presentation new]
+    $t addHeader Foobar 1 2 3
+    $t asLoL
+} -cleanup {
+    $t destroy
+} -result {{Foobar 1 2 3}}
+
+
+::tcltest::test presentation_addHeader-1.1 {addHeader:} -constraints {presentation_addHeader} -setup {
+} -body {
+    # decl: addHeader {_label args}
+    set t [Presentation new]
+    $t addHeader Foobar
+    $t asLoL
+} -cleanup {
+    $t destroy
+} -match glob -result {tabellen finns inte*} -returnCodes error
+
+
+::tcltest::test presentation_addHeader-1.2 {addHeader:} -constraints {presentation_addHeader} -setup {
+} -body {
+    # decl: addHeader {_label args}
+    set t [Presentation new]
+    $t addHeader
+    $t asLoL
+} -cleanup {
+    $t destroy
+} -match glob -result {tabellen finns inte*} -returnCodes error
+
+
+::tcltest::test presentation_addRow-1.0 {addRow:} -constraints {presentation_addRow} -setup {
+} -body {
+    # decl: addRow {key args}
+    set t [Presentation new Foobar 1 2 3]
+    $t addRow a 45 89 23
+    $t asLoL
+} -cleanup {
+    $t destroy
+} -result {{Foobar 1 2 3} {a 45 89 23}}
+
+
+::tcltest::test presentation_addRow-1.1 {addRow:} -constraints {presentation_addRow} -setup {
+} -body {
+    # decl: addRow {key args}
+    set t [Presentation new Foobar 1 2 3]
+    $t addRow a
+    $t asLoL
+} -cleanup {
+    $t destroy
+} -result {{Foobar 1 2 3} {a {} {} {}}}
+
+
+::tcltest::test presentation_get-1.0 {get:} -constraints {presentation_get} -setup {
+} -body {
+    # decl: get {row col}
+    set t [Presentation new Foobar 1 2 3]
+    $t addRow a 45 89 23
+    $t get a 2
+} -cleanup {
+    $t destroy
+} -result 89
+
+
+::tcltest::test presentation_get-1.1 {get:} -constraints {presentation_get} -setup {
+} -body {
+    # decl: get {row col}
+    set t [Presentation new Foobar 1 2 3]
+    $t addRow a 45 89 23
+    $t get a 4
+} -cleanup {
+    $t destroy
+} -match glob -result {kolumnrubrik "4" saknas*} -returnCodes error
+
+
+::tcltest::test presentation_set-1.0 {set:} -constraints {presentation_set} -setup {
+} -body {
+    # decl: set {row col val}
+    set t [Presentation new Foobar 1 2 3]
+    $t addRow a 45 89 23
+    $t set a 2 33
+    $t get a 2
+} -cleanup {
+    $t destroy
+} -result 33
+
+
+::tcltest::test presentation_incr-1.0 {incr:} -constraints {presentation_incr} -setup {
+} -body {
+    # decl: incr {row col args}
+    set t [Presentation new Foobar 1 2 3]
+    $t addRow a 45 89 23
+    $t incr a 2
+} -cleanup {
+    $t destroy
+} -result 90
+
+
+::tcltest::test presentation_incr-1.1 {incr:} -constraints {presentation_incr} -setup {
+} -body {
+    # decl: incr {row col args}
+    set t [Presentation new Foobar 1 2 3]
+    $t addRow a 45 89 23
+    $t incr a 2 15
+} -cleanup {
+    $t destroy
+} -result 104
+
+
+::tcltest::test presentation_incr-1.2 {incr:} -constraints {presentation_incr} -setup {
+} -body {
+    # decl: incr {row col args}
+    set t [Presentation new Foobar 1 2 3]
+    $t addRow a 45 89 23
+    $t incr a 2 {}
+} -cleanup {
+    $t destroy
+} -result 89
+
+
+::tcltest::test presentation_getRow-1.0 {getRow:} -constraints {presentation_getRow} -setup {
+} -body {
+    # decl: getRow row
+    set t [Presentation new Foobar 1 2 3]
+    $t addRow a 45 89 23
+    $t addRow b 89 37 82
+    $t getRow a
+} -cleanup {
+    $t destroy
+} -result {a 45 89 23}
+
+
+::tcltest::test presentation_getColumn-1.0 {getColumn:} -constraints {presentation_getColumn} -setup {
+} -body {
+    # decl: getColumn col
+    set t [Presentation new Foobar 1 2 3]
+    $t addRow a 45 89 23
+    $t addRow b 89 37 82
+    $t getColumn 2
+} -cleanup {
+    $t destroy
+} -result {2 89 37}
+
+
+::tcltest::test presentation_rows-1.0 {rows:} -constraints {presentation_rows} -setup {
+} -body {
+    # decl: rows {}
+    set t [Presentation new Foobar 1 2 3]
+    $t addRow a 45 89 23
+    $t addRow b 89 37 82
+    $t rows
+} -cleanup {
+    $t destroy
+} -result 3
+
+
+::tcltest::test presentation_columns-1.0 {columns:} -constraints {presentation_columns} -setup {
+} -body {
+    # decl: columns {}
+    set t [Presentation new Foobar 1 2 3]
+    $t addRow a 45 89 23
+    $t addRow b 89 37 82
+    $t columns
+} -cleanup {
+    $t destroy
+} -result 4
+
+
+::tcltest::test presentation_toDOM-1.0 {toDOM:} -constraints {presentation_toDOM} -setup {
+} -body {
+    # decl: toDOM doc
+    set t [Presentation new Foobar 1 2 3]
+    $t addRow a 45 89 23
+    $t addRow b 89 37 82
+    set doc [dom createDocument html]
+    set root [$doc documentElement]
+    $root appendChild [$t toDOM $doc]
+    $doc asHTML
+} -cleanup {
+    $t destroy
+    $doc delete
+} -result {<html><table>
+<caption>Foobar</caption><tr>
+<th></th><th>1</th><th>2</th><th>3</th>
+</tr><tr>
+<th>a</th><td>45</td><td>89</td><td>23</td>
+</tr><tr>
+<th>b</th><td>89</td><td>37</td><td>82</td>
+</tr>
+</table></html>}
+
+
+::tcltest::test presentation_asLoL-1.0 {asLoL:} -constraints {presentation_asLoL} -setup {
+} -body {
+    # decl: asLoL {}
+    set t [Presentation new Foobar 1 2 3]
+    $t addRow a 45 89 23
+    $t addRow b 89 37 82
+    $t asLoL
+} -cleanup {
+    $t destroy
+} -result {{Foobar 1 2 3} {a 45 89 23} {b 89 37 82}}
+
+
+::tcltest::test presentation_toMatrix-1.0 {toMatrix:} -constraints {presentation_toMatrix} -setup {
+} -body {
+    # decl: toMatrix {}
+    set t [Presentation new Foobar 1 2 3]
+    $t addRow a 45 89 23
+    $t addRow b 89 37 82
+    set m [$t toMatrix [::struct::matrix]]
+    $m get cell 3 2
+} -cleanup {
+    $t destroy
+    $m destroy
+} -result 82
+
+
+::tcltest::test presentation_tally-1.0 {tally:} -constraints {presentation_tally} -setup {
+} -body {
+    # decl: tally args
+    set t [Presentation new Foobar 1 2 3]
+    $t tally foo 1
+    $t tally bar 2
+    $t tally baz 3
+    $t makeDistribution value 0 -dictionary
+    $t asLoL
+} -cleanup {
+    $t destroy
+} -result {{Foobar 1 2 3} {bar 0 1 0} {baz 0 0 1} {foo 1 0 0}}
+
+
+::tcltest::test presentation_tally-1.1 {tally:} -constraints {presentation_tally} -setup {
+} -body {
+    # decl: tally args
+    set t [Presentation new Foobar 1 2 3]
+    $t tally foo 1
+    $t tally bar 2
+    $t tally baz 3
+    $t makeDistribution value 2 -dictionary
+    $t asLoL
+} -cleanup {
+    $t destroy
+} -result {{Foobar 1 2 3} {bar 0 1 0} {baz 0 0 1}}
+
+
+::tcltest::test presentation_tally-1.2 {tally:} -constraints {presentation_tally} -setup {
+} -body {
+    # decl: tally args
+    set t [Presentation new Foobar 1]
+    $t tally foo
+    $t tally foo
+    $t tally foo
+    $t tally bar
+    $t tally bar
+    $t tally baz
+    $t makeDistribution value 0 -integer -decreasing
+    $t asLoL
+} -cleanup {
+    $t destroy
+} -result {{Foobar 1} {foo 3} {bar 2} {baz 1}}
+
+
+::tcltest::test presentation_tally-1.3 {tally:} -constraints {presentation_tally} -setup {
+} -body {
+    # decl: tally args
+    set t [Presentation new Foobar 1]
+    $t tally foo
+    $t tally foo
+    $t tally foo
+    $t tally bar
+    $t tally bar
+    $t tally baz
+    $t makeDistribution name 0 -dictionary
+    $t asLoL
+} -cleanup {
+    $t destroy
+} -result {{Foobar 1} {bar 2} {baz 1} {foo 3}}
+
+
+::tcltest::test presentation_tally-1.4 {tally:} -constraints {presentation_tally} -setup {
+} -body {
+    # decl: tally args
+    set t [Presentation new Foobar 1]
+    $t tally foo
+    $t tally foo
+    $t tally foo
+    $t tally bar
+    $t tally bar
+    $t tally baz
+    $t makeDistribution name 2 -dictionary
+    $t asLoL
+} -cleanup {
+    $t destroy
+} -result {{Foobar 1} {bar 2} {baz 1}}
+
+
+::tcltest::test presentation_lookupColumn-1.0 {} -constraints {presentation_lookupColumn} -setup {
+} -body {
+    set t [Presentation new Foobar 1 a]
+    $t lookupColumn a
+} -cleanup {
+    $t destroy
+} -result 2
+
+
+::tcltest::test presentationwriter_write-1.0 {} -constraints {presentationwriter_write} -setup {
+    ::tcltest::makeFile {} foo.csv
+} -body {
+    set t [Presentation new Foobar 1 2 3]
+    $t addRow a 45 89 23
+    $t addRow b 89 37 82
+    set w [PresentationWriter new]
+    $w write [file join [tcltest::temporaryDirectory] foo.csv] $t
+    ::tcltest::viewFile [file join [tcltest::temporaryDirectory] foo.csv]
+} -cleanup {
+    $t destroy
+} -result {Foobar;1;2;3
+a;45;89;23
+b;89;37;82}
+
+
+::tcltest::test presentationwriter_write-1.0 {} -constraints {presentationwriter_write} -setup {
+    ::tcltest::makeFile {} foo.html
+} -body {
+    set t [Presentation new Foobar 1 2 3]
+    $t addRow a 45 89 23
+    $t addRow b 89 37 82
+    set w [PresentationWriter new]
+    $w write [file join [tcltest::temporaryDirectory] foo.html] $t
+    ::tcltest::viewFile [file join [tcltest::temporaryDirectory] foo.html]
+} -cleanup {
+    $t destroy
+} -result {<html>
+<head>
+<link rel="stylesheet" type="text/css" href="csvops.css"><title>Utmatning skapad av csvops</title>
+</head><body><table>
+<caption>Foobar</caption><tr>
+<th></th><th>1</th><th>2</th><th>3</th>
+</tr><tr>
+<th>a</th><td>45</td><td>89</td><td>23</td>
+</tr><tr>
+<th>b</th><td>89</td><td>37</td><td>82</td>
+</tr>
+</table></body>
+</html>}
+
+
+::tcltest::test utils_anon-1.0 {anon:} -constraints {utils_anon} -setup {
+} -body {
+    # decl: anon args
+    set res {}
+    lappend res [anon 6 2]
+    lappend res [anon 2 6]
+    lappend res [anon 4 4]
+    lappend res [anon 2 6]
+    set res
+} -cleanup {
+    unset res
+} -result {1 2 3 2}
+
+
+::tcltest::test utils_cols-1.0 {cols:} -constraints {utils_cols} -setup {
+} -body {
+    # decl: cols {fields headings}
+    cols {c d g} {a b c d e f g h i j}
+} -cleanup {
+} -result {2 3 6}
+
+
+::tcltest::test utils_cols-1.1 {cols:} -constraints {utils_cols} -setup {
+} -body {
+    # decl: cols {fields headings}
+    cols {c d g} {}
+} -cleanup {
+} -match glob -result {ogiltigt f*ltnamn "c"} -returnCodes error
+
+
+::tcltest::test utils_dayDistance-1.0 {dayDistance:} -constraints {utils_dayDistance} -setup {
+} -body {
+    # decl: dayDistance {varName date {format %y-%m-%d}}
+    dayDistance 13-06-25 13-06-25
+} -cleanup {
+} -result 0
+
+
+::tcltest::test utils_dayDistance-1.1 {dayDistance:} -constraints {utils_dayDistance} -setup {
+} -body {
+    # decl: dayDistance {varName date {format %y-%m-%d}}
+    dayDistance 13-06-25 13-06-30
+} -cleanup {
+} -result 5
+
+
+::tcltest::test utils_dayDistance-1.2 {dayDistance:} -constraints {utils_dayDistance} -setup {
+} -body {
+    # decl: dayDistance {varName date {format %y-%m-%d}}
+    dayDistance 13-06-25 14-06-25
+} -cleanup {
+} -result 365
+
+
+::tcltest::test utils_dayDistance-1.3 {dayDistance:} -constraints {utils_dayDistance} -setup {
+} -body {
+    # decl: dayDistance {varName date {format %y-%m-%d}}
+    dayDistance 13-06-25 12-06-25
+} -cleanup {
+} -result -365
+
+
+::tcltest::test utils_getFirstLine-1.0 {getFirstLine:} -constraints {utils_getFirstLine} -setup {
+    ::tcltest::makeFile "foo bar\nbaz qux" foo.bar
+} -body {
+    # decl: getFirstLine filename
+    getFirstLine [file join [::tcltest::configure -tmpdir] foo.bar]
+} -cleanup {
+} -result {foo bar}
+
+
+::tcltest::test utils_getdiag-1.0 {getdiag:} -constraints {utils_getdiag} -setup {
+} -body {
+    # decl: getdiag ds
+    getdiag saknas
+} -cleanup {
+} -result saknas
+
+
+::tcltest::test utils_getdiag-1.1 {getdiag:} -constraints {utils_getdiag} -setup {
+} -body {
+    # decl: getdiag ds
+    getdiag z
+} -cleanup {
+} -result z
+
+
+::tcltest::test utils_getdiag-1.2 {getdiag:} -constraints {utils_getdiag} -setup {
+} -body {
+    # decl: getdiag ds
+    getdiag annan
+} -cleanup {
+} -result annan
+
+
+::tcltest::test utils_getdiag-1.3 {getdiag:} -constraints {utils_getdiag} -setup {
+} -body {
+    # decl: getdiag ds
+    getdiag f6
+} -cleanup {
+} -result f6
+
+
+::tcltest::test utils_getdiag-1.4 {getdiag:} -constraints {utils_getdiag} -setup {
+} -body {
+    # decl: getdiag ds
+    getdiag {saknas z}
+} -cleanup {
+} -result z
+
+
+::tcltest::test utils_getdiag-1.5 {getdiag:} -constraints {utils_getdiag} -setup {
+} -body {
+    # decl: getdiag ds
+    getdiag {annan z}
+} -cleanup {
+} -result annan
+
+
+::tcltest::test utils_getdiag-1.6 {getdiag:} -constraints {utils_getdiag} -setup {
+} -body {
+    # decl: getdiag ds
+    getdiag {f6 z}
+} -cleanup {
+} -result f6
+
+
+::tcltest::test utils_getdiag-1.7 {getdiag:} -constraints {utils_getdiag} -setup {
+} -body {
+    # decl: getdiag ds
+    getdiag {saknas annan}
+} -cleanup {
+} -result annan
+
+
+::tcltest::test utils_getdiag-1.8 {getdiag:} -constraints {utils_getdiag} -setup {
+} -body {
+    # decl: getdiag ds
+    getdiag {z annan}
+} -cleanup {
+} -result annan
+
+
+::tcltest::test utils_getdiag-1.9 {getdiag:} -constraints {utils_getdiag} -setup {
+} -body {
+    # decl: getdiag ds
+    getdiag {f6 annan}
+} -cleanup {
+} -result f6
+
+
+::tcltest::test utils_round-1.0 {round:} -constraints {utils_round} -setup {
+} -body {
+    # decl: round {varName sigdig decimals {decimalChar ,}}
+    set x 1.75451658
+    set a [round $x 6 2]
+    set b [round $x 2 6]
+    set c [round $x 4 4 &]
+    list $a $b $c
+} -cleanup {
+    unset x a b c
+} -result {1,75 1,800000 1&7550}
+
+
+::tcltest::test utils_round-1.1 {round:} -constraints {utils_round} -setup {
+} -body {
+    # decl: round {varName sigdig decimals {decimalChar ,}}
+    set x 1754516.58
+    set a [round $x 6 2]
+    set b [round $x 2 6]
+    set c [round $x 4 4 &]
+    list $a $b $c
+} -cleanup {
+    unset x a b c
+} -result {1754520,00 1800000,000000 1755000&0000}
+
+
+::tcltest::test utils_serialCompareEqual-1.0 {serialCompareEqual:} -constraints {utils_serialCompareEqual} -setup {
+} -body {
+    # decl: serialCompareEqual {c0 c1}
+    set a [serialCompareEqual {1 1 1} {1 1 1}]
+    set b [serialCompareEqual {1 1 1} {1 1 0}]
+    list $a $b
+} -cleanup {
+    unset a b
+} -result {{1 1 1} {1 1 0}}
+
+
+::tcltest::test utils_serialCompareEqualDecimal-1.0 {serialCompareEqualDecimal:} -constraints {utils_serialCompareEqualDecimal} -setup {
+} -body {
+    # decl: serialCompareEqualDecimal {c0 c1}
+    serialCompareEqualDecimal {1,2 1 1} {1,2 1,00 1,0000005}
+} -cleanup {
+} -result {1 1 0}
+
+
+::tcltest::test utils_serialCompareEmpty-1.0 {serialCompareEmpty:} -constraints {utils_serialCompareEmpty} -setup {
+} -body {
+    # decl: serialCompareEmpty {c0 c1}
+    serialCompareEmpty {{} {} 1 1} {{} 1 1 {}}
+} -cleanup {
+} -result {3 2 0 1}
+
+
+::tcltest::test utils_yearDistance-1.0 {yearDistance:} -constraints {utils_yearDistance} -setup {
+} -body {
+    # decl: yearDistance {year0 {year1 {}}}
+    set a [yearDistance 2014 2012]
+    set b [yearDistance 2014 2015]
+    # TODO will have to be changed every year
+    set c [yearDistance 2014]
+    list $a $b $c
+} -cleanup {
+    unset a b c
+} -result {-2 1 2}
+
+
+::tcltest::test utils_getdiag_a-1.0 {getdiag_a:} -constraints {utils_getdiag_a} -setup {
+} -body {
+    getdiag_a {}
+} -cleanup {
+} -result annan
+
+
+::tcltest::test utils_getdiag_a-1.1 {getdiag_a:} -constraints {utils_getdiag_a} -setup {
+} -body {
+    getdiag_a {foo bar baz}
+} -cleanup {
+} -result annan
+
+
+::tcltest::test utils_getdiag_a-1.2 {getdiag_a:} -constraints {utils_getdiag_a} -setup {
+} -body {
+    getdiag_a {foo f7 bar baz}
+} -cleanup {
+} -result f7
+
+
+::tcltest::test validator_validate-1.0 {validate:} -constraints {validator_validate} -setup {
+    ::tcltest::makeFile {} validate-output
+    set p [Reader new]
+    set m [::struct::matrix]
+    $m add columns 4
+    $m add row {1 2 3 4}
+    $m add row {5 6 7 8}
+    $p fields {a b c d}
+    $p import $m
+} -body {
+    # decl: validate {clauses output}
+    $p validate {
+        F(c) one-of {1 2 3 4}
+        F(c) not-one-of {1 2 3 4}
+        F(c) matches {[1-4]}
+    } [file join [::tcltest::configure -tmpdir] validate-output]
+    ::tcltest::viewFile validate-output
+} -cleanup {
+    $p destroy
+    unset m
+} -match glob -result {Rad 1: v*rde 3 (f*lt F(c)) *r en av {1 2 3 4}
+Rad 2: v*rde 7 (f*lt F(c)) *r inte en av {1 2 3 4}
+Rad 2: v*rde 7 (f*lt F(c)) matchar inte "\[1-4\]"}
+
+
+::tcltest::test validator_validate-1.1 {validate:} -constraints {validator_validate} -setup {
+    ::tcltest::makeFile {} validate-output
+    set p [Reader new]
+    set m [::struct::matrix]
+    $m add columns 4
+    $m add row {1 2 3 4}
+    $m add row {5 6 7 8}
+    $p fields {a b c d}
+    $p import $m
+} -body {
+    # decl: validate {clauses output}
+    $p validate {
+        F(c) foobar {1 2 3 4}
+    } [file join [::tcltest::configure -tmpdir] validate-output]
+    ::tcltest::viewFile validate-output
+} -cleanup {
+    $p destroy
+    unset m
+} -match glob -result {ogiltig valideringsoperation "foobar"*} -returnCodes error
+
+
+::tcltest::test validator_one-of-1.0 {one-of:} -constraints {validator_oneOf} -setup {
+} -body {
+    # decl: one-of {val validation}
+    validator one-of 99 {98 99 100}
+} -cleanup {
+} -result {}
+
+
+::tcltest::test validator_one-of-1.1 {one-of:} -constraints {validator_oneOf} -setup {
+} -body {
+    # decl: one-of {val validation}
+    validator one-of 97 {98 99 100}
+} -cleanup {
+} -match glob -result {*r inte en av {98 99 100}}
+
+
+::tcltest::test validator_not-one-of-1.0 {not-one-of:} -constraints {validator_notOneOf} -setup {
+} -body {
+    # decl: not-one-of {val validation}
+    validator not-one-of a {b c d}
+} -cleanup {
+} -result {}
+
+
+::tcltest::test validator_matches-1.0 {matches:} -constraints {validator_matches} -setup {
+} -body {
+    # decl: matches {val validation}
+    validator matches foo {f([aou])\1}
+} -cleanup {
+} -result {}
+
+
+::tcltest::test validator_matches-or-is-empty-1.0 {matches-or-is-empty:} -constraints {validator_matchesOrIsEmpty} -setup {
+} -body {
+    # decl: matches-or-is-empty {val validation}
+    validator matches-or-is-empty xyz {...}
+} -cleanup {
+} -result {}
+
+
+::tcltest::test validator_matches-or-is-empty-1.1 {matches-or-is-empty:} -constraints {validator_matchesOrIsEmpty} -setup {
+} -body {
+    # decl: matches-or-is-empty {val validation}
+    validator matches-or-is-empty {} {...}
+} -cleanup {
+} -result {}
+
+
+::tcltest::test validator_belongs-to-1.0 {belongs-to:} -constraints {validator_belongsTo} -setup {
+    proc ::csvops::convert-foobar val {return xyz}
+} -body {
+    # decl: belongs-to {val validation}
+} -cleanup {
+    validator belongs-to x foobar
+} -result {}
+
+
+::tcltest::test logging_addMessage-1.0 {addMessage:} -constraints {logging_addMessage} -setup {
+    ::tcltest::makeFile "0;foo\n1;snarf\n2;blue" a.csv
+    ::csvops::log::reset
+    set ::csvops::log::running 1
+    set r [Reader new -fields {foo bar}]
+} -body {
+    $r read [file join [::tcltest::configure -tmpdir] a.csv]
+    set ::csvops::log::messages
+} -cleanup {
+    $r destroy
+} -match glob -result {Reader ::oo::Obj* skapad
+Reader ::oo::Obj* l*ser in "C:/Users/petle5/data/work/csvops/csvops.vfs/test/temp/a.csv"
+Reader ::oo::Obj* 3 rader, 21 bytear inl*sta
+}
+
+
+set options(-separator) \;
+
+
+::tcltest::test logging_addMessage-1.1 {addMessage:} -constraints {logging_addMessage} -setup {
+    ::tcltest::makeFile {} w.csv
+    set r [Reader new -fields {foo bar}]
+    set w [Writer new -fields {foo bar}]
+    ::tcltest::makeFile "0;foo\n1;snarf\n2;blue" a.csv
+    ::csvops::log::reset
+    set ::csvops::log::running 1
+} -body {
+    $r read [file join [::tcltest::configure -tmpdir] a.csv]
+    $r get { $w put }
+    $w write [file join [::tcltest::configure -tmpdir] w.csv]
+    set ::csvops::log::messages
+} -cleanup {
+    $r destroy
+    $w destroy
+} -match glob -result {Reader ::oo::Obj* l*ser in "C:/Users/petle5/data/work/csvops/csvops.vfs/test/temp/a.csv"
+Reader ::oo::Obj* 3 rader, 21 bytear inl*sta
+Writer ::oo::Obj* skriver filen "C:/Users/petle5/data/work/csvops/csvops.vfs/test/temp/w.csv"
+}
+
+
+::tcltest::test logging_addMessage-1.2 {} -constraints {logging_addMessage} -setup {
+    ::tcltest::makeFile {} foo.csv
+    ::csvops::log::reset
+    set ::csvops::log::running 1
+} -body {
+    set t [Presentation new Foobar 1 2 3]
+    $t addRow a 45 89 23
+    $t addRow b 89 37 82
+    set w [PresentationWriter new]
+    $w write [file join [tcltest::temporaryDirectory] foo.csv] $t
+    set ::csvops::log::messages
+} -cleanup {
+    $t destroy
+} -match glob -result {Presentation ::oo::Obj* skapad
+PresentationWriter ::oo::Obj* skapad
+PresentationWriter ::oo::Obj* skriver filen "C:/Users/petle5/data/work/csvops/csvops.vfs/test/temp/foo.csv" med formatet CSV
+}
+
+
+::tcltest::test logging_addMessage-1.3 {} -constraints {logging_addMessage} -setup {
+    ::tcltest::makeFile {} foo.html
+    ::csvops::log::reset
+    set ::csvops::log::running 1
+} -body {
+    set t [Presentation new Foobar 1 2 3]
+    $t addRow a 45 89 23
+    $t addRow b 89 37 82
+    set w [PresentationWriter new]
+    $w write [file join [tcltest::temporaryDirectory] foo.html] $t
+    set ::csvops::log::messages
+} -cleanup {
+    $t destroy
+} -match glob -result {Presentation ::oo::Obj* skapad
+PresentationWriter ::oo::Obj* skapad
+PresentationWriter ::oo::Obj* skriver filen "C:/Users/petle5/data/work/csvops/csvops.vfs/test/temp/foo.html" med formatet HTML
+}
+
+
+::tcltest::test logging_setLabel-1.0 {setLabel:} -constraints {logging_setLabel} -setup {
+    ::tcltest::makeFile "0;foo\n1;snarf\n2;blue" a.csv
+    ::csvops::log::reset
+    set ::csvops::log::running 1
+    set r [Reader new -fields {foo bar}]
+} -body {
+    $r read [file join [::tcltest::configure -tmpdir] a.csv]
+    $r get {}
+    lassign $::csvops::log::objects key lbl
+    set tag [dict get $::csvops::log::labels $key]
+    list $key $lbl $tag
+} -cleanup {
+    $r destroy
+} -match glob -result {{Reader ::oo::Obj*} {bearbetar rad 3} loglbl1}
+
+
+::tcltest::test logging_setLabel-1.1 {setLabel:} -constraints {logging_setLabel} -setup {
+    set r [Reader new -fields {foo bar}]
+    set w [Writer new -fields {foo bar}]
+    ::tcltest::makeFile "0;foo\n1;snarf\n2;blue" a.csv
+    ::csvops::log::reset
+    set ::csvops::log::running 1
+    ::tcltest::makeFile {} w.csv
+} -body {
+    $r read [file join [::tcltest::configure -tmpdir] a.csv]
+    $r get { $w put }
+    lassign [dict filter $::csvops::log::objects key Writer*] key lbl
+    set tag [dict get $::csvops::log::labels $key]
+    list $key $lbl $tag
+} -cleanup {
+    $r destroy
+    $w destroy
+} -match glob -result {{Writer ::oo::Obj*} {lagrar rad 3} loglbl2}
+
+
+if no {
+::Presentation destroy
+foreach file [glob -dir [file join $starkit::topdir _src] *.tcl] {
+    source $file
+}
+}
+
+
+::tcltest::test result_create-1.0 {result_create: nullary} -constraints {result_create} -setup {
+} -body {
+    set r [Result new]
+    list [$r getFieldNames] [$r getData]
+} -cleanup {
+    $r destroy
+} -match glob -result {{} {}}
+
+
+::tcltest::test result_create-1.1 {result_create: unary} -constraints {result_create} -setup {
+    set m [::struct::matrix]
+    $m add columns 3
+    $m add row {a b c}
+    $m add row {1 2 3}
+} -body {
+    set r [Result new $m]
+    list [$r getFieldNames] [$r getData]
+} -cleanup {
+    $r destroy
+    $m destroy
+} -match glob -result {{a b c} {{1 2 3}}}
+
+
+::tcltest::test result_create-1.2 {result_create: binary} -constraints {result_create} -setup {
+} -body {
+    set r [Result new {a b c} {{1 2 3} {4 5 6}}]
+    list [$r getFieldNames] [$r getData]
+} -cleanup {
+    $r destroy
+} -match glob -result {{a b c} {{1 2 3} {4 5 6}}}
+
+
+::tcltest::test result_setFieldNames-1.0 {result_setFieldNames:} -constraints {result_setFieldNames} -setup {
+} -body {
+    set r [Result new {a b c} {{1 2 3} {4 5 6}}]
+    $r setFieldNames z y x w v
+    list [$r getFieldNames] [$r getData]
+} -cleanup {
+    $r destroy
+} -match glob -result {{z y x w v} {{1 2 3 {} {}} {4 5 6 {} {}}}}
+
+
+::tcltest::test result_setFieldNames-1.1 {result_setFieldNames:} -constraints {result_setFieldNames} -setup {
+} -body {
+    set r [Result new {a b c} {{1 2 3} {4 5 6}}]
+    $r setFieldNames z y x w v
+    $r setFieldNames a b
+    list [$r getFieldNames] [$r getData]
+} -cleanup {
+    $r destroy
+} -match glob -result {{a b {} {} {}} {{1 2 3 {} {}} {4 5 6 {} {}}}}
+
+
+::tcltest::test result_setFieldNames-1.2 {result_setFieldNames:} -constraints {result_setFieldNames} -setup {
+} -body {
+    set r [Result new]
+    $r setFieldNames a b c
+    list [$r getFieldNames] [$r getData]
+} -cleanup {
+    $r destroy
+} -match glob -result {{a b c} {}}
+
+
+::tcltest::test result_getFieldNames-1.0 {result_getFieldNames:} -constraints {result_getFieldNames} -setup {
+} -body {
+    set r [Result new]
+    $r getFieldNames
+} -cleanup {
+    $r destroy
+} -match glob -result {}
+
+
+::tcltest::test result_getFieldNames-1.1 {result_getFieldNames:} -constraints {result_getFieldNames} -setup {
+} -body {
+    set r [Result new {a b c} {}]
+    $r getFieldNames
+} -cleanup {
+    $r destroy
+} -match glob -result {a b c}
+
+
+::tcltest::test result_getData-1.0 {result_getData:} -constraints {result_getData} -setup {
+} -body {
+    set r [Result new]
+    $r getData
+} -cleanup {
+    $r destroy
+} -match glob -result {}
+
+
+::tcltest::test result_getData-1.1 {result_getData:} -constraints {result_getData} -setup {
+} -body {
+    set r [Result new {a b c} {}]
+    $r getData
+} -cleanup {
+    $r destroy
+} -match glob -result {}
+
+
+::tcltest::test result_getData-1.2 {result_getData:} -constraints {result_getData} -setup {
+} -body {
+    set r [Result new {a b c} {{1 2 3}}]
+    $r getData
+} -cleanup {
+    $r destroy
+} -match glob -result {{1 2 3}}
+
+
+::tcltest::test result_getData-1.3 {result_getData:} -constraints {result_getData} -setup {
+} -body {
+    set r [Result new {a b c} {{1 2 3} {4 5 6}}]
+    $r getData
+} -cleanup {
+    $r destroy
+} -match glob -result {{1 2 3} {4 5 6}}
+
+
+::tcltest::test result_union-1.0 {result_union:} -constraints {result_union} -setup {
+} -body {
+    set r [Result new {a b c} {{1 2 3} {2 3 1} {3 1 2} {3 1 2}}]
+    set s [Result new {a b c} {{4 5 6} {5 6 4} {4 5 6}}]
+    set t [$r union $s]
+    list [$t getFieldNames] [$t getData]
+} -cleanup {
+    $r destroy
+    $s destroy
+    $t destroy
+} -match glob -result {{a b c} {{3 1 2} {2 3 1} {1 2 3} {5 6 4} {4 5 6}}}
+
+
+::tcltest::test result_intersect-1.0 {result_intersect:} -constraints {result_intersect} -setup {
+} -body {
+    set r [Result new {a b c} {{1 2 3} {2 3 1} {3 1 2} {3 1 2}}]
+    set s [Result new {a b c} {{4 5 6} {5 6 4} {4 5 6}}]
+    set t [$r intersect $s]
+    list [$t getFieldNames] [$t getData]
+} -cleanup {
+    $r destroy
+    $s destroy
+    $t destroy
+} -match glob -result {{a b c} {}}
+
+
+::tcltest::test result_intersect-1.1 {result_intersect:} -constraints {result_intersect} -setup {
+} -body {
+    set r [Result new {a b c} {{1 2 3} {2 3 1} {3 1 2} {3 1 2}}]
+    set s [Result new {a b c} {{2 3 1} {2 3 1} {3 2 1}}]
+    set t [$r intersect $s]
+    list [$t getFieldNames] [$t getData]
+} -cleanup {
+    $r destroy
+    $s destroy
+    $t destroy
+} -match glob -result {{a b c} {{2 3 1}}}
+
+
+::tcltest::test result_except-1.0 {result_except:} -constraints {result_except} -setup {
+} -body {
+    set r [Result new {a b c} {{1 2 3} {2 3 1} {3 1 2} {3 1 2}}]
+    set s [Result new {a b c} {{4 5 6} {5 6 4} {4 5 6}}]
+    set t [$r except $s]
+    list [$t getFieldNames] [$t getData]
+} -cleanup {
+    $r destroy
+    $s destroy
+    $t destroy
+} -match glob -result {{a b c} {{3 1 2} {2 3 1} {1 2 3}}}
+
+
+::tcltest::test result_except-1.1 {result_except:} -constraints {result_except} -setup {
+} -body {
+    set r [Result new {a b c} {{1 2 3} {2 3 1} {3 1 2} {3 1 2}}]
+    set s [Result new {a b c} {{2 3 1} {2 3 1} {3 2 1}}]
+    set t [$r except $s]
+    list [$t getFieldNames] [$t getData]
+} -cleanup {
+    $r destroy
+    $s destroy
+    $t destroy
+} -match glob -result {{a b c} {{3 1 2} {1 2 3}}}
+
+
+::tcltest::test result_union_all-1.0 {result_union_all:} -constraints {result_union_all} -setup {
+} -body {
+    set r [Result new {a b c} {{1 2 3} {2 3 1} {3 1 2} {3 1 2}}]
+    set s [Result new {a b c} {{4 5 6} {5 6 4} {4 5 6}}]
+    set t [$r union-all $s]
+    list [$t getFieldNames] [$t getData]
+} -cleanup {
+    $r destroy
+    $s destroy
+    $t destroy
+} -match glob -result {{a b c} {{1 2 3} {2 3 1} {3 1 2} {3 1 2} {4 5 6} {5 6 4} {4 5 6}}}
+
+
+::tcltest::test result_union_all-1.1 {result_union_all:} -constraints {result_union_all} -setup {
+} -body {
+    set r [Result new {a b c} {{1 2 3} {2 3 1} {3 1 2} {3 1 2}}]
+    set s [Result new {a b c} {}]
+    set t [$r union-all $s]
+    list [$t getFieldNames] [$t getData]
+} -cleanup {
+    $r destroy
+    $s destroy
+    $t destroy
+} -match glob -result {{a b c} {{1 2 3} {2 3 1} {3 1 2} {3 1 2}}}
+
+
+::tcltest::test result_union_all-1.2 {result_union_all:} -constraints {result_union_all} -setup {
+} -body {
+    set r [Result new {a b c} {}]
+    set s [Result new {a b c} {{4 5 6} {5 6 4} {4 5 6}}]
+    set t [$r union-all $s]
+    list [$t getFieldNames] [$t getData]
+} -cleanup {
+    $r destroy
+    $s destroy
+    $t destroy
+} -match glob -result {{a b c} {{4 5 6} {5 6 4} {4 5 6}}}
+
+
+::tcltest::test result_distinct-1.0 {result_distinct:} -constraints {result_distinct} -setup {
+} -body {
+    set r [Result new {a b c} {{1 2 3} {2 3 1} {3 1 2} {3 1 2} {1 3 2}}]
+    set t [$r distinct]
+    list [$t getFieldNames] [$t getData]
+} -cleanup {
+    $r destroy
+    $t destroy
+} -match glob -result {{a b c} {{1 3 2} {3 1 2} {2 3 1} {1 2 3}}}
+
+
+::tcltest::test result_unique-1.0 {result_unique:} -constraints {result_unique} -setup {
+} -body {
+    set r [Result new {a b c} {{1 2 3} {2 3 1} {3 1 2} {3 1 2} {1 3 2}}]
+    set t [$r unique a]
+    list [$t getFieldNames] [$t getData]
+} -cleanup {
+    $r destroy
+    $t destroy
+} -match glob -result {{a b c} {{1 3 2} {2 3 1} {3 1 2}}}
+
+
+::tcltest::test result_limit-1.0 {result_limit:} -constraints {result_limit} -setup {
+} -body {
+    set r [Result new {a b} {{1 2} {3 4} {5 6} {7 8} {9 0} {2 1} {4 3} {6 5} {8 7} {0 9}}]
+    set t [$r limit 0]
+    list [$t getFieldNames] [$t getData]
+} -cleanup {
+    $r destroy
+    $t destroy
+} -match glob -result {{a b} {}}
+
+
+::tcltest::test result_limit-1.1 {result_limit:} -constraints {result_limit} -setup {
+} -body {
+    set r [Result new {a b} {{1 2} {3 4} {5 6} {7 8} {9 0} {2 1} {4 3} {6 5} {8 7} {0 9}}]
+    set t [$r limit 1]
+    list [$t getFieldNames] [$t getData]
+} -cleanup {
+    $r destroy
+    $t destroy
+} -match glob -result {{a b} {{1 2}}}
+
+
+::tcltest::test result_limit-1.2 {result_limit:} -constraints {result_limit} -setup {
+} -body {
+    set r [Result new {a b} {{1 2} {3 4} {5 6} {7 8} {9 0} {2 1} {4 3} {6 5} {8 7} {0 9}}]
+    set t [$r limit 5]
+    list [$t getFieldNames] [$t getData]
+} -cleanup {
+    $r destroy
+    $t destroy
+} -match glob -result {{a b} {{1 2} {3 4} {5 6} {7 8} {9 0}}}
+
+
+::tcltest::test result_limit-1.3 {result_limit:} -constraints {result_limit} -setup {
+} -body {
+    set r [Result new {a b} {{1 2} {3 4} {5 6} {7 8} {9 0} {2 1} {4 3} {6 5} {8 7} {0 9}}]
+    set t [$r limit all]
+    list [$t getFieldNames] [$t getData]
+} -cleanup {
+    $r destroy
+    $t destroy
+} -match glob -result {{a b} {{1 2} {3 4} {5 6} {7 8} {9 0} {2 1} {4 3} {6 5} {8 7} {0 9}}}
+
+
+::tcltest::test result_limit-1.4 {result_limit:} -constraints {result_limit} -setup {
+} -body {
+    set r [Result new {a b} {{1 2} {3 4} {5 6} {7 8} {9 0} {2 1} {4 3} {6 5} {8 7} {0 9}}]
+    set t [$r limit all-1]
+    list [$t getFieldNames] [$t getData]
+} -cleanup {
+    $r destroy
+    $t destroy
+} -match glob -result {{a b} {{1 2} {3 4} {5 6} {7 8} {9 0} {2 1} {4 3} {6 5} {8 7}}}
+
+
+::tcltest::test result_limit-1.5 {result_limit:} -constraints {result_limit} -setup {
+} -body {
+    set r [Result new {a b} {{1 2} {3 4} {5 6} {7 8} {9 0} {2 1} {4 3} {6 5} {8 7} {0 9}}]
+    set t [$r limit all-2]
+    list [$t getFieldNames] [$t getData]
+} -cleanup {
+    $r destroy
+    $t destroy
+} -match glob -result {{a b} {{1 2} {3 4} {5 6} {7 8} {9 0} {2 1} {4 3} {6 5}}}
+
+
+::tcltest::test result_limit-1.6 {result_limit:} -constraints {result_limit} -setup {
+} -body {
+    set r [Result new {a b} {{1 2} {3 4} {5 6} {7 8} {9 0} {2 1} {4 3} {6 5} {8 7} {0 9}}]
+    set t [$r limit 0 3]
+    list [$t getFieldNames] [$t getData]
+} -cleanup {
+    $r destroy
+    $t destroy
+} -match glob -result {{a b} {{1 2} {3 4} {5 6}}}
+
+
+::tcltest::test result_limit-1.7 {result_limit:} -constraints {result_limit} -setup {
+} -body {
+    set r [Result new {a b} {{1 2} {3 4} {5 6} {7 8} {9 0} {2 1} {4 3} {6 5} {8 7} {0 9}}]
+    set t [$r limit 1 3]
+    list [$t getFieldNames] [$t getData]
+} -cleanup {
+    $r destroy
+    $t destroy
+} -match glob -result {{a b} {{1 2} {3 4} {5 6} {7 8}}}
+
+
+::tcltest::test result_limit-1.8 {result_limit:} -constraints {result_limit} -setup {
+} -body {
+    set r [Result new {a b} {{1 2} {3 4} {5 6} {7 8} {9 0} {2 1} {4 3} {6 5} {8 7} {0 9}}]
+    set t [$r limit 5 3]
+    list [$t getFieldNames] [$t getData]
+} -cleanup {
+    $r destroy
+    $t destroy
+} -match glob -result {{a b} {{1 2} {3 4} {5 6} {7 8} {9 0} {2 1} {4 3} {6 5}}}
+
+
+::tcltest::test result_limit-1.9 {result_limit:} -constraints {result_limit} -setup {
+} -body {
+    set r [Result new {a b} {{1 2} {3 4} {5 6} {7 8} {9 0} {2 1} {4 3} {6 5} {8 7} {0 9}}]
+    set t [$r limit all 3]
+    list [$t getFieldNames] [$t getData]
+} -cleanup {
+    $r destroy
+    $t destroy
+} -match glob -result {{a b} {{1 2} {3 4} {5 6} {7 8} {9 0} {2 1} {4 3} {6 5} {8 7} {0 9}}}
+
+
+::tcltest::test result_order_by-1.0 {result_order_by:} -constraints {result_order_by} -setup {
+} -body {
+    set r [Result new {a b} {{2 a} {11 a} {1 b} {2 b} {11 A} {1 A}}]
+    $r order-by {a -integer} {b -nocase}
+    list [$r getFieldNames] [$r getData]
+} -cleanup {
+    $r destroy
+} -match glob -result {{a b} {{1 A} {2 a} {11 a} {11 A} {1 b} {2 b}}}
+
+
+::tcltest::test result_order_by-1.1 {result_order_by:} -constraints {result_order_by} -setup {
+} -body {
+    set r [Result new {a b} {{2 a} {11 a} {1 b} {2 b} {11 A} {1 A}}]
+    $r order-by a {b -nocase}
+    list [$r getFieldNames] [$r getData]
+} -cleanup {
+    $r destroy
+} -match glob -result {{a b} {{1 A} {11 a} {11 A} {2 a} {1 b} {2 b}}}
+
+
+::tcltest::test result_order_by-1.2 {result_order_by:} -constraints {result_order_by} -setup {
+} -body {
+    set r [Result new {a b} {{2 a} {11 a} {1 b} {2 b} {11 A} {1 A}}]
+    $r order-by a b
+    list [$r getFieldNames] [$r getData]
+} -cleanup {
+    $r destroy
+} -match glob -result {{a b} {{1 A} {11 A} {11 a} {2 a} {1 b} {2 b}}}
+
+
+::tcltest::test result_order_by-1.3 {result_order_by:} -constraints {result_order_by} -setup {
+} -body {
+    set r [Result new {a b} {{2 a} {11 a} {1 b} {2 b} {11 A} {1 A}}]
+    $r order-by {a -integer} b
+    list [$r getFieldNames] [$r getData]
+} -cleanup {
+    $r destroy
+} -match glob -result {{a b} {{1 A} {11 A} {2 a} {11 a} {1 b} {2 b}}}
+
+
+::tcltest::test result_select-1.0 {result_select:} -constraints {result_select} -setup {
+} -body {
+    set r [Result new {a b c d} {{1 2 3 4} {2 3 4 1} {3 4 1 2} {4 1 2 3}}]
+    set t [$r select -predicate 0 a b]
+    list [$t getFieldNames] [$t getData]
+} -cleanup {
+    $r destroy
+    $t destroy
+} -match glob -result {{a b} {}}
+
+
+::tcltest::test result_select-1.1 {result_select:} -constraints {result_select} -setup {
+} -body {
+    set r [Result new {a b c d} {{1 2 3 4} {2 3 4 1} {3 4 1 2} {4 1 2 3}}]
+    set t [$r select -predicate 1 a b]
+    list [$t getFieldNames] [$t getData]
+} -cleanup {
+    $r destroy
+    $t destroy
+} -match glob -result {{a b} {{1 2} {2 3} {3 4} {4 1}}}
+
+
+::tcltest::test result_select-1.2 {result_select: no predicate} -constraints {result_select} -setup {
+} -body {
+    set r [Result new {a b c d} {{1 2 3 4} {2 3 4 1} {3 4 1 2} {4 1 2 3}}]
+    set t [$r select a b]
+    list [$t getFieldNames] [$t getData]
+} -cleanup {
+    $r destroy
+    $t destroy
+} -match glob -result {{a b} {{1 2} {2 3} {3 4} {4 1}}}
+
+
+::tcltest::test result_select-1.3 {result_select:} -constraints {result_select} -setup {
+} -body {
+    set r [Result new {a b c d} {{1 2 3 4} {2 3 4 1} {3 4 1 2} {4 1 2 3}}]
+    set t [$r select -predicate {$a % 2} a b]
+    list [$t getFieldNames] [$t getData]
+} -cleanup {
+    $r destroy
+    $t destroy
+} -match glob -result {{a b} {{1 2} {3 4}}}
+
+
+::tcltest::test result_read-1.0 {result_read:} -constraints {result_read} -setup {
+} -body {
+    ::tcltest::makeFile "a;b;c;d\n1;2;3;4" a.csv
+    ::tcltest::makeFile "5;6;7;8\n6;7;8;5" b.csv
+    set r [Result new]
+    set t [$r read a.csv]
+    list [$t getFieldNames] [$t getData]
+} -cleanup {
+    $r destroy
+    $t destroy
+} -match glob -result {{a b c d} {{1 2 3 4}}}
+
+
+::tcltest::test result_read-1.1 {result_read:} -constraints {result_read} -setup {
+} -body {
+    ::tcltest::makeFile "a;b;c;d\n1;2;3;4" a.csv
+    ::tcltest::makeFile "5;6;7;8\n6;7;8;5" b.csv
+    set r [Result new]
+    set t [$r read a.csv b.csv]
+    list [$t getFieldNames] [$t getData]
+} -cleanup {
+    $r destroy
+    $t destroy
+} -match glob -result {{a b c d} {{5 6 7 8} {6 7 8 5}}}
+
+
+::tcltest::test view_create-1.0 {view_create: nullary} -constraints {view_create} -setup {
+} -body {
+    set v [View new]
+    $v serialize
+} -cleanup {
+    $v destroy
+} -match glob -result {0 0 {}}
+
+
+::tcltest::test view_create-1.1 {view_create:} -constraints {view_create} -setup {
+} -body {
+    ::tcltest::makeFile "a;b;c;d\n1;2;3;4" a.csv
+    ::tcltest::makeFile "5;6;7;8\n6;7;8;5" b.csv
+    set v [View new a.csv]
+    $v serialize
+} -cleanup {
+    $v destroy
+} -match glob -result {2 4 {{a b c d} {1 2 3 4}}}
+
+
+::tcltest::test view_create-1.2 {view_create:} -constraints {view_create} -setup {
+} -body {
+    ::tcltest::makeFile "a;b;c;d\n1;2;3;4" a.csv
+    ::tcltest::makeFile "5;6;7;8\n6;7;8;5" b.csv
+    set v [View new a.csv b.csv]
+    $v serialize
+} -cleanup {
+    $v destroy
+} -match glob -result {3 4 {{a b c d} {5 6 7 8} {6 7 8 5}}}
+
+
+::tcltest::test view_set_header-1.0 {view_set_header:} -constraints {view_set_header} -setup {
+} -body {
+    set v [View new]
+    $v set header {a b c}
+    $v add row {1 2 3}
+    $v add row {4 5 6}
+    $v set header {z y x w v}
+    $v serialize
+} -cleanup {
+    $v destroy
+} -match glob -result {3 5 {{z y x w v} {1 2 3 {} {}} {4 5 6 {} {}}}}
+
+
+::tcltest::test view_set_header-1.1 {view_set_header:} -constraints {view_set_header} -setup {
+} -body {
+    set v [View new]
+    $v set header {a b c}
+    $v add row {1 2 3}
+    $v add row {4 5 6}
+    $v set header {z y x w v}
+    $v set header {a #3}
+    $v serialize
+} -cleanup {
+    $v destroy
+} -match glob -result {3 5 {{a #3 #2 #3' #4} {1 2 3 {} {}} {4 5 6 {} {}}}}
+
+
+::tcltest::test view_set_header-1.2 {view_set_header:} -constraints {view_set_header} -setup {
+} -body {
+    set v [View new]
+    $v set header {a b c}
+    $v serialize
+} -cleanup {
+    $v destroy
+} -match glob -result {1 3 {{a b c}}}
+
+
+::tcltest::test view_getFieldNames-1.0 {view_getFieldNames:} -constraints {view_getFieldNames} -setup {
+} -body {
+    set v [View new]
+    $v get header
+} -cleanup {
+    $v destroy
+} -match glob -result {bad row index 0, row does not exist*} -returnCodes error
+
+
+::tcltest::test view_getFieldNames-1.1 {view_getFieldNames:} -constraints {view_getFieldNames} -setup {
+} -body {
+    set v [View new]
+    $v set header {a b c}
+    $v get header
+} -cleanup {
+    $v destroy
+} -match glob -result {a b c}
+
+
+::tcltest::test view_get_rows-1.0 {view_get_rows:} -constraints {view_get_rows} -setup {
+} -body {
+    set v [View new]
+    $v get rows
+} -cleanup {
+    $v destroy
+} -match glob -result {}
+
+
+::tcltest::test view_get_rows-1.1 {view_get_rows:} -constraints {view_get_rows} -setup {
+} -body {
+    set v [View new]
+    $v set header {a b c}
+    $v get rows
+} -cleanup {
+    $v destroy
+} -match glob -result {}
+
+
+::tcltest::test view_get_rows-1.2 {view_get_rows:} -constraints {view_get_rows} -setup {
+} -body {
+    set v [View new]
+    $v set header {a b c}
+    $v add row {1 2 3}
+    $v get rows
+} -cleanup {
+    $v destroy
+} -match glob -result {{1 2 3}}
+
+
+::tcltest::test view_get_rows-1.3 {view_get_rows:} -constraints {view_get_rows} -setup {
+} -body {
+    set v [View new]
+    $v set header {a b c}
+    $v add row {1 2 3}
+    $v add row {4 5 6}
+    $v get rows
+} -cleanup {
+    $v destroy
+} -match glob -result {{1 2 3} {4 5 6}}
+
+
+::tcltest::test view_union-1.0 {view_union:} -constraints {view_union} -setup {
+} -body {
+    set v1 [View new]
+    $v1 set header {a b c}
+    foreach row {{1 2 3} {2 3 1} {3 1 2} {3 1 2}} {$v1 add row $row}
+    set v2 [View new]
+    $v2 set header {a b c}
+    foreach row {{4 5 6} {5 6 4} {4 5 6}} {$v2 add row $row}
+    $v1 union $v2
+    $v1 serialize
+} -cleanup {
+    $v1 destroy
+    $v2 destroy
+} -match glob -result {6 3 {{a b c} {3 1 2} {2 3 1} {1 2 3} {5 6 4} {4 5 6}}}
+
+
+::tcltest::test view_intersect-1.0 {view_intersect:} -constraints {view_intersect} -setup {
+} -body {
+    set v1 [View new]
+    $v1 set header {a b c}
+    foreach row {{1 2 3} {2 3 1} {3 1 2} {3 1 2}} {$v1 add row $row}
+    set v2 [View new]
+    $v2 set header {a b c}
+    foreach row {{4 5 6} {5 6 4} {4 5 6}} {$v2 add row $row}
+    $v1 intersect $v2
+    $v1 serialize
+} -cleanup {
+    $v1 destroy
+    $v2 destroy
+} -match glob -result {1 3 {{a b c}}}
+
+
+::tcltest::test view_intersect-1.1 {view_intersect:} -constraints {view_intersect} -setup {
+} -body {
+    set v1 [View new]
+    $v1 set header {a b c}
+    foreach row {{1 2 3} {2 3 1} {3 1 2} {3 1 2}} {$v1 add row $row}
+    set v2 [View new]
+    $v2 set header {a b c}
+    foreach row {{2 3 1} {2 3 1} {3 2 1}} {$v2 add row $row}
+    $v1 intersect $v2
+    $v1 serialize
+} -cleanup {
+    $v1 destroy
+    $v2 destroy
+} -match glob -result {2 3 {{a b c} {2 3 1}}}
+
+
+::tcltest::test view_except-1.0 {view_except:} -constraints {view_except} -setup {
+} -body {
+    set v1 [View new]
+    $v1 set header {a b c}
+    foreach row {{1 2 3} {2 3 1} {3 1 2} {3 1 2}} {$v1 add row $row}
+    set v2 [View new]
+    $v2 set header {a b c}
+    foreach row {{4 5 6} {5 6 4} {4 5 6}} {$v2 add row $row}
+    $v1 except $v2
+    $v1 serialize
+} -cleanup {
+    $v1 destroy
+    $v2 destroy
+} -match glob -result {4 3 {{a b c} {3 1 2} {2 3 1} {1 2 3}}}
+
+
+::tcltest::test view_except-1.1 {view_except:} -constraints {view_except} -setup {
+} -body {
+    set v1 [View new]
+    $v1 set header {a b c}
+    foreach row {{1 2 3} {2 3 1} {3 1 2} {3 1 2}} {$v1 add row $row}
+    set v2 [View new]
+    $v2 set header {a b c}
+    foreach row {{2 3 1} {2 3 1} {3 2 1}} {$v2 add row $row}
+    $v1 except $v2
+    $v1 serialize
+} -cleanup {
+    $v1 destroy
+    $v2 destroy
+} -match glob -result {3 3 {{a b c} {3 1 2} {1 2 3}}}
+
+
+::tcltest::test view_union_all-1.0 {view_union_all:} -constraints {view_union_all} -setup {
+} -body {
+    set v1 [View new]
+    $v1 set header {a b c}
+    foreach row {{1 2 3} {2 3 1} {3 1 2} {3 1 2}} {$v1 add row $row}
+    set v2 [View new]
+    $v2 set header {a b c}
+    foreach row {{4 5 6} {5 6 4} {4 5 6}} {$v2 add row $row}
+    $v1 union-all $v2
+    $v1 serialize
+} -cleanup {
+    $v1 destroy
+    $v2 destroy
+} -match glob -result {8 3 {{a b c} {1 2 3} {2 3 1} {3 1 2} {3 1 2} {4 5 6} {5 6 4} {4 5 6}}}
+
+
+::tcltest::test view_union_all-1.1 {view_union_all:} -constraints {view_union_all} -setup {
+} -body {
+    set v1 [View new]
+    $v1 set header {a b c}
+    foreach row {{1 2 3} {2 3 1} {3 1 2} {3 1 2}} {$v1 add row $row}
+    set v2 [View new]
+    $v2 set header {a b c}
+    $v1 union-all $v2
+    $v1 serialize
+} -cleanup {
+    $v1 destroy
+    $v2 destroy
+} -match glob -result {5 3 {{a b c} {1 2 3} {2 3 1} {3 1 2} {3 1 2}}}
+
+
+::tcltest::test view_union_all-1.2 {view_union_all:} -constraints {view_union_all} -setup {
+} -body {
+    set v1 [View new]
+    $v1 set header {a b c}
+    set v2 [View new]
+    $v2 set header {a b c}
+    foreach row {{4 5 6} {5 6 4} {4 5 6}} {$v2 add row $row}
+    $v1 union-all $v2
+    $v1 serialize
+} -cleanup {
+    $v1 destroy
+    $v2 destroy
+} -match glob -result {4 3 {{a b c} {4 5 6} {5 6 4} {4 5 6}}}
+
+
+::tcltest::test view_distinct-1.0 {view_distinct:} -constraints {view_distinct} -setup {
+} -body {
+    set v [View new]
+    $v set header {a b c}
+    foreach row {{1 2 3} {2 3 1} {3 1 2} {3 1 2} {1 3 2}} {$v add row $row}
+    $v distinct
+    $v serialize
+} -cleanup {
+    $v destroy
+} -match glob -result {5 3 {{a b c} {1 2 3} {1 3 2} {2 3 1} {3 1 2}}}
+
+
+::tcltest::test view_unique-1.0 {view_unique:} -constraints {view_unique} -setup {
+} -body {
+    set v [View new]
+    $v set header {a b c}
+    foreach row {{1 2 3} {2 3 1} {3 1 2} {3 1 2} {1 3 2}} {$v add row $row}
+    $v unique a
+    $v serialize
+} -cleanup {
+    $v destroy
+} -match glob -result {4 3 {{a b c} {1 3 2} {2 3 1} {3 1 2}}}
+
+
+::tcltest::test view_range-1.0 {view_range:} -constraints {view_range} -setup {
+} -body {
+    set v [View new]
+    $v set header {a b}
+    foreach row {{1 2} {3 4} {5 6} {7 8} {9 0} {2 1} {4 3} {6 5} {8 7} {0 9}} {$v add row $row}
+    $v range 0 0
+} -cleanup {
+    $v destroy
+} -match glob -result {1 2 {{a b}}}
+
+
+::tcltest::test view_range-1.1 {view_range:} -constraints {view_range} -setup {
+} -body {
+    set v [View new]
+    $v set header {a b}
+    foreach row {{1 2} {3 4} {5 6} {7 8} {9 0} {2 1} {4 3} {6 5} {8 7} {0 9}} {$v add row $row}
+    $v range 0 1
+} -cleanup {
+    $v destroy
+} -match glob -result {2 2 {{a b} {1 2}}}
+
+
+::tcltest::test view_range-1.2 {view_range:} -constraints {view_range} -setup {
+} -body {
+    set v [View new]
+    $v set header {a b}
+    foreach row {{1 2} {3 4} {5 6} {7 8} {9 0} {2 1} {4 3} {6 5} {8 7} {0 9}} {$v add row $row}
+    $v range 0 5
+} -cleanup {
+    $v destroy
+} -match glob -result {6 2 {{a b} {1 2} {3 4} {5 6} {7 8} {9 0}}}
+
+
+::tcltest::test view_range-1.3 {view_range:} -constraints {view_range} -setup {
+} -body {
+    set v [View new]
+    $v set header {a b}
+    foreach row {{1 2} {3 4} {5 6} {7 8} {9 0} {2 1} {4 3} {6 5} {8 7} {0 9}} {$v add row $row}
+    $v range 0 end
+} -cleanup {
+    $v destroy
+} -match glob -result {11 2 {{a b} {1 2} {3 4} {5 6} {7 8} {9 0} {2 1} {4 3} {6 5} {8 7} {0 9}}}
+
+
+::tcltest::test view_range-1.4 {view_range:} -constraints {view_range} -setup {
+} -body {
+    set v [View new]
+    $v set header {a b}
+    foreach row {{1 2} {3 4} {5 6} {7 8} {9 0} {2 1} {4 3} {6 5} {8 7} {0 9}} {$v add row $row}
+    $v range 0 end-1
+} -cleanup {
+    $v destroy
+} -match glob -result {10 2 {{a b} {1 2} {3 4} {5 6} {7 8} {9 0} {2 1} {4 3} {6 5} {8 7}}}
+
+
+::tcltest::test view_range-1.5 {view_range:} -constraints {view_range} -setup {
+} -body {
+    set v [View new]
+    $v set header {a b}
+    foreach row {{1 2} {3 4} {5 6} {7 8} {9 0} {2 1} {4 3} {6 5} {8 7} {0 9}} {$v add row $row}
+    $v range 0 end-2
+} -cleanup {
+    $v destroy
+} -match glob -result {9 2 {{a b} {1 2} {3 4} {5 6} {7 8} {9 0} {2 1} {4 3} {6 5}}}
+
+
+::tcltest::test view_range-1.6 {view_range:} -constraints {view_range} -setup {
+} -body {
+    set v [View new]
+    $v set header {a b}
+    foreach row {{1 2} {3 4} {5 6} {7 8} {9 0} {2 1} {4 3} {6 5} {8 7} {0 9}} {$v add row $row}
+    $v range 0 3
+} -cleanup {
+    $v destroy
+} -match glob -result {4 2 {{a b} {1 2} {3 4} {5 6}}}
+
+
+::tcltest::test view_range-1.7 {view_range:} -constraints {view_range} -setup {
+} -body {
+    set v [View new]
+    $v set header {a b}
+    foreach row {{1 2} {3 4} {5 6} {7 8} {9 0} {2 1} {4 3} {6 5} {8 7} {0 9}} {$v add row $row}
+    $v range 1 3
+} -cleanup {
+    $v destroy
+} -match glob -result {3 2 {{1 2} {3 4} {5 6}}}
+
+
+::tcltest::test view_range-1.8 {view_range:} -constraints {view_range} -setup {
+} -body {
+    set v [View new]
+    $v set header {a b}
+    foreach row {{1 2} {3 4} {5 6} {7 8} {9 0} {2 1} {4 3} {6 5} {8 7} {0 9}} {$v add row $row}
+    $v range 5 8
+} -cleanup {
+    $v destroy
+} -match glob -result {4 2 {{9 0} {2 1} {4 3} {6 5}}}
+
+
+::tcltest::test view_range-1.9 {view_range:} -constraints {view_range} -setup {
+} -body {
+    set v [View new]
+    $v set header {a b}
+    foreach row {{1 2} {3 4} {5 6} {7 8} {9 0} {2 1} {4 3} {6 5} {8 7} {0 9}} {$v add row $row}
+    $v range 3 end
+} -cleanup {
+    $v destroy
+} -match glob -result {8 2 {{5 6} {7 8} {9 0} {2 1} {4 3} {6 5} {8 7} {0 9}}}
+
+
+::tcltest::test view_order_by-1.0 {view_order_by:} -constraints {view_order_by} -setup {
+} -body {
+    set v [View new]
+    $v set header {a b}
+    foreach row {{2 a} {11 a} {1 b} {2 b} {11 A} {1 A}} {$v add row $row}
+    $v order-by {a -integer} {b -nocase}
+    $v serialize
+} -cleanup {
+    $v destroy
+} -match glob -result {7 2 {{a b} {1 A} {2 a} {11 a} {11 A} {1 b} {2 b}}}
+
+
+::tcltest::test view_order_by-1.1 {view_order_by:} -constraints {view_order_by} -setup {
+} -body {
+    set v [View new]
+    $v set header {a b}
+    foreach row {{2 a} {11 a} {1 b} {2 b} {11 A} {1 A}} {$v add row $row}
+    $v order-by a {b -nocase}
+    $v serialize
+} -cleanup {
+    $v destroy
+} -match glob -result {7 2 {{a b} {1 A} {11 a} {11 A} {2 a} {1 b} {2 b}}}
+
+
+::tcltest::test view_order_by-1.2 {view_order_by:} -constraints {view_order_by} -setup {
+} -body {
+    set v [View new]
+    $v set header {a b}
+    foreach row {{2 a} {11 a} {1 b} {2 b} {11 A} {1 A}} {$v add row $row}
+    $v order-by a b
+    $v serialize
+} -cleanup {
+    $v destroy
+} -match glob -result {7 2 {{a b} {1 A} {11 A} {11 a} {2 a} {1 b} {2 b}}}
+
+
+::tcltest::test view_order_by-1.3 {view_order_by:} -constraints {view_order_by} -setup {
+} -body {
+    set v [View new]
+    $v set header {a b}
+    foreach row {{2 a} {11 a} {1 b} {2 b} {11 A} {1 A}} {$v add row $row}
+    $v order-by {a -integer} b
+    $v serialize
+} -cleanup {
+    $v destroy
+} -match glob -result {7 2 {{a b} {1 A} {11 A} {2 a} {11 a} {1 b} {2 b}}}
+
+
+::tcltest::test view_select-1.0 {view_select:} -constraints {view_select} -setup {
+} -body {
+    set v [View new]
+    $v set header {a b c d}
+    foreach row {{1 2 3 4} {2 3 4 1} {3 4 1 2} {4 1 2 3}} {$v add row $row}
+    $v select {a b}
+    $v serialize
+} -cleanup {
+    $v destroy
+} -match glob -result {5 2 {{a b} {1 2} {2 3} {3 4} {4 1}}}
+
+
+::tcltest::test view_filter-1.0 {view_filter:} -constraints {view_filter} -setup {
+} -body {
+    set v [View new]
+    $v set header {a b}
+    foreach row {{1 2} {2 3} {3 4} {4 1}} {$v add row $row}
+    $v filter {$a % 2}
+    $v serialize
+} -cleanup {
+    $v destroy
+} -match glob -result {3 2 {{a b} {1 2} {3 4}}}
+
+
+::tcltest::test view_read-1.0 {view_read:} -constraints {view_read} -setup {
+} -body {
+    ::tcltest::makeFile "a;b;c;d\n1;2;3;4" a.csv
+    ::tcltest::makeFile "5;6;7;8\n6;7;8;5" b.csv
+    set v [View new a.csv]
+    $v serialize
+} -cleanup {
+    $v destroy
+} -match glob -result {2 4 {{a b c d} {1 2 3 4}}}
+
+
+::tcltest::test view_read-1.1 {view_read:} -constraints {view_read} -setup {
+} -body {
+    ::tcltest::makeFile "a;b;c;d\n1;2;3;4" a.csv
+    ::tcltest::makeFile "5;6;7;8\n6;7;8;5" b.csv
+    set v [View new a.csv b.csv]
+    $v serialize
+} -cleanup {
+    $v destroy
+} -match glob -result {3 4 {{a b c d} {5 6 7 8} {6 7 8 5}}}
+
+
+::tcltest::cleanupTests

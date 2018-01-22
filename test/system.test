@@ -1,0 +1,240 @@
+package require tcltest
+
+::tcltest::configure {*}$argv
+
+::tcltest::testConstraint system 1
+::tcltest::testConstraint skip 0
+::tcltest::testConstraint noskip 1
+
+::tcltest::loadTestedCommands
+
+file copy -force [file join [::tcltest::configure -testdir] eval.csv] [::tcltest::configure -tmpdir]
+file copy -force [file join [::tcltest::configure -testdir] eval2.csv] [::tcltest::configure -tmpdir]
+
+set EXEC [list exec tclsh [file join $::env(USERPROFILE) starkits csvops.kit]]
+set FOO_CO [file join [::tcltest::configure -tmpdir] foo.co]
+
+::tcltest::test system-1.0 {} -constraints system -setup {
+} -body {
+    {*}$EXEC
+} -cleanup {
+} -match glob -result {Cannot read file "", does not exist*} -returnCodes error
+
+
+::tcltest::test system-1.1 {} -constraints system -setup {
+} -body {
+    {*}$EXEC foo:bar
+} -cleanup {
+} -match glob -result {Cannot read file "foo:bar", does not exist*} -returnCodes error
+
+
+::tcltest::test system-1.2 {} -constraints system -setup {
+    ::tcltest::makeFile {puts "I'm foo"} foo.co
+} -body {
+    {*}$EXEC $FOO_CO
+} -cleanup {
+} -result {I'm foo}
+
+
+::tcltest::test system-2.0 {options: defaults} -constraints system -setup {
+    ::tcltest::makeFile {
+        ::fileutil::writeFile foo.out [lmap opt [lsort [array names ::options]] {
+            list $opt $options($opt)
+        }]
+    } foo.co
+    ::tcltest::makeFile {} foo.out
+} -body {
+    {*}$EXEC $FOO_CO
+    ::tcltest::viewFile foo.out
+} -cleanup {
+} -result {{-alternate 0} {-cols {}} {-expand auto} {-fields {}} {-rows :} {-separator {;}}}
+
+
+::tcltest::test system-2.1 {options: all} -constraints system -setup {
+    ::tcltest::makeFile {
+        ::fileutil::writeFile foo.out [lmap opt [lsort [array names ::options]] {
+            list $opt $options($opt)
+        }]
+    } foo.co
+    ::tcltest::makeFile {} foo.out
+} -body {
+    {*}$EXEC -alternate -cols ab -expand empty -fields cd -rows ef -separator gh $FOO_CO
+    ::tcltest::viewFile foo.out
+} -cleanup {
+} -result {{-alternate 1} {-cols ab} {-expand empty} {-fields cd} {-rows ef} {-separator gh}}
+
+
+::tcltest::test system-2.2 {options: abbreviated} -constraints system -setup {
+    ::tcltest::makeFile {
+        ::fileutil::writeFile foo.out [lmap opt [lsort [array names ::options]] {
+            list $opt $options($opt)
+        }]
+    } foo.co
+    ::tcltest::makeFile {} foo.out
+} -body {
+    {*}$EXEC -e n $FOO_CO
+    ::tcltest::viewFile foo.out
+} -cleanup {
+} -result {{-alternate 0} {-cols {}} {-expand none} {-fields {}} {-rows :} {-separator {;}}}
+
+
+::tcltest::test system-2.3 {options: -expand unknown value} -constraints system -setup {
+    ::tcltest::makeFile {
+        ::fileutil::writeFile foo.out [lmap opt [lsort [array names ::options]] {
+            list $opt $options($opt)
+        }]
+    } foo.co
+    ::tcltest::makeFile {} foo.out
+} -body {
+    {*}$EXEC -e z $FOO_CO
+    ::tcltest::viewFile foo.out
+} -cleanup {
+} -match glob -result {ogiltig expansionstyp "z", b?r vara auto, empty eller none*} -returnCodes error
+
+
+::tcltest::test system-3.0 {copy database} -constraints {noskip system} -setup {
+    ::tcltest::makeFile {} foobar.csv
+    ::tcltest::makeFile {
+        Reader create s
+        set w [Writer new]
+        $w fields [s fields {a b c d e}]
+        s read eval.csv
+        s get { $w put }
+        $w write foobar.csv
+    } foo.co
+} -body {
+    {*}$EXEC -sep , $FOO_CO
+    ::tcltest::viewFile foobar.csv
+} -cleanup {
+} -result {023,EVAL cmd eval in list obj var,26,45,57.78
+024,EVAL cmd eval as list,23,42,54.76
+025,EVAL cmd eval as string,53,92,57.61
+026,EVAL cmd and mixed lists,3805,11276,33.74
+027,EVAL list cmd and mixed lists,3812,11325,33.66
+028,EVAL list cmd and pure lists,592,1598,37.05}
+
+
+::tcltest::test system-3.1 {copy two columns from database} -constraints {noskip system} -setup {
+    ::tcltest::makeFile {} foobar.csv
+    ::tcltest::makeFile {
+        Reader create s -cols {0 1}
+        set w [Writer new]
+        $w fields [s fields {nr msg}]
+        s read eval.csv
+        s get { $w put }
+        $w write foobar.csv
+    } foo.co
+} -body {
+    {*}$EXEC -sep , $FOO_CO
+    ::tcltest::viewFile foobar.csv
+} -cleanup {
+} -result {023,EVAL cmd eval in list obj var
+024,EVAL cmd eval as list
+025,EVAL cmd eval as string
+026,EVAL cmd and mixed lists
+027,EVAL list cmd and mixed lists
+028,EVAL list cmd and pure lists}
+
+
+::tcltest::test system-3.2 {copy two rows from database} -constraints {noskip system} -setup {
+    ::tcltest::makeFile {} foobar.csv
+    ::tcltest::makeFile {
+        Reader create s -rows 5:
+        set w [Writer new]
+        $w fields [s fields {a b c d e}]
+        s read eval.csv
+        s get { $w put }
+        $w write foobar.csv
+    } foo.co
+} -body {
+    {*}$EXEC -sep , $FOO_CO
+    ::tcltest::viewFile foobar.csv
+} -cleanup {
+} -result {027,EVAL list cmd and mixed lists,3812,11325,33.66
+028,EVAL list cmd and pure lists,592,1598,37.05}
+
+
+::tcltest::test system-4.0 {fields: change the value of a field} -constraints system -setup {
+    ::tcltest::makeFile {} foobar.csv
+    ::tcltest::makeFile {
+        Reader create s -cols :2
+        set w [Writer new]
+        $w fields [s fields {nr msg a}]
+        s read eval2.csv
+        s get {
+            set F(a) [expr {$F(a) * 2}]
+            $w put
+        }
+        $w write foobar.csv
+    } foo.co
+} -body {
+    {*}$EXEC -sep , $FOO_CO
+    ::tcltest::viewFile foobar.csv
+} -cleanup {
+} -result {023,EVAL cmd eval in list obj var,52
+024,EVAL cmd eval as list,46
+025,EVAL cmd eval as string,106
+026,EVAL cmd and mixed lists,7610
+027,EVAL list cmd and mixed lists,7624
+028,EVAL list cmd and pure lists,1184
+026,EVAL cmd eval as string,106}
+
+
+::tcltest::test system-4.1 {fields: add a field in output} -constraints system -setup {
+    ::tcltest::makeFile {} foobar.csv
+    ::tcltest::makeFile {
+        Reader create s -cols :2
+        set w [Writer new]
+        s fields {nr msg a}
+        $w fields {nr msg a b}
+        s read eval2.csv
+        s get {
+            set F(b) [expr {$F(a) * 2}]
+            $w put
+        }
+        $w write foobar.csv
+    } foo.co
+} -body {
+    {*}$EXEC -sep , $FOO_CO
+    ::tcltest::viewFile foobar.csv
+} -cleanup {
+} -result {023,EVAL cmd eval in list obj var,26,52
+024,EVAL cmd eval as list,23,46
+025,EVAL cmd eval as string,53,106
+026,EVAL cmd and mixed lists,3805,7610
+027,EVAL list cmd and mixed lists,3812,7624
+028,EVAL list cmd and pure lists,592,1184
+026,EVAL cmd eval as string,53,106}
+
+
+::tcltest::test system-4.2 {fields: remove duplicate ids} -constraints system -setup {
+    ::tcltest::makeFile {} foobar.csv
+    ::tcltest::makeFile {
+        Reader create s -cols :2
+        set w [Writer new]
+        $w fields [s fields {nr msg a}]
+        s read eval2.csv
+        s get {
+            if {[s unique nr]} {
+                $w put
+            }
+        }
+        $w write foobar.csv
+    } foo.co
+} -body {
+    {*}$EXEC -sep , $FOO_CO
+    ::tcltest::viewFile foobar.csv
+} -cleanup {
+} -result {023,EVAL cmd eval in list obj var,26
+024,EVAL cmd eval as list,23
+025,EVAL cmd eval as string,53
+026,EVAL cmd and mixed lists,3805
+027,EVAL list cmd and mixed lists,3812
+028,EVAL list cmd and pure lists,592}
+
+
+file delete [file join [::tcltest::configure -tmpdir] eval.csv]
+file delete [file join [::tcltest::configure -tmpdir] eval2.csv]
+
+
+::tcltest::cleanupTests
