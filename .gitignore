@@ -1,6 +1,7 @@
 *.swp
 *~
 test*.txt
+l.*.test
 
 # Windows image file caches
 Thumbs.db

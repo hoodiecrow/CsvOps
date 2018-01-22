@@ -1,0 +1,128 @@
+package require log
+package require tcltest
+namespace import ::tcltest::*
+
+configure {*}$argv
+
+loadTestedCommands
+
+package require log
+if {[llength [info commands mc]] < 1} {
+    interp alias {} mc {} format
+}
+
+set auto_path [linsert $auto_path 0 .]
+::tcl::tm::path add .
+
+package require optionhandler
+
+test optionHandler-1.0 {} -setup {
+    unset -nocomplain options
+} -body {
+    optionHandler handle {}
+} -result {no array name given} -returnCodes error
+
+test optionHandler-1.1 {} -setup {
+    unset -nocomplain options
+} -body {
+    optionHandler handle {my name ::options}
+    lmap name [lsort [array names options]] {array get options $name}
+} -result {}
+
+test optionHandler-1.2 {} -setup {
+    unset -nocomplain options
+} -body {
+    set words [optionHandler handle {my name ::options} foo bar baz]
+    list [lmap name [lsort [array names options]] {array get options $name}] $words
+} -cleanup {
+} -result {{} {foo bar baz}}
+
+test optionHandler-1.3 {} -setup {
+    unset -nocomplain options
+} -body {
+    set words [optionHandler handle {my name ::options} -- bar baz]
+    list [lmap name [lsort [array names options]] {array get options $name}] $words
+} -cleanup {
+} -result {{} {bar baz}}
+
+test optionHandler-1.4 {} -setup {
+    unset -nocomplain options
+} -body {
+    array set options {-abc 1 -abd 2 -def 3}
+    set words [optionHandler handle {my name ::options} -- bar baz]
+    list [lmap name [lsort [array names options]] {array get options $name}] $words
+} -cleanup {
+} -result {{{-abc 1} {-abd 2} {-def 3}} {bar baz}}
+
+test optionHandler-1.5 {} -setup {
+    unset -nocomplain options
+} -body {
+    array set options {-abc 1 -abd 2 -def 3}
+    set words [optionHandler handle {my name ::options} -abc 99 -- bar baz]
+    list [lmap name [lsort [array names options]] {array get options $name}] $words
+} -cleanup {
+} -result {{{-abc 99} {-abd 2} {-def 3}} {bar baz}}
+
+test optionHandler-1.6 {} -setup {
+    unset -nocomplain options
+} -body {
+    array set options {-abc 1 -abd 2 -def 3}
+    set words [optionHandler handle {my name ::options} -ab 99 -- bar baz]
+    list [lmap name [lsort [array names options]] {array get options $name}] $words
+} -cleanup {
+    log::lvSuppressLE i 1
+} -result {ambiguous option "-ab": must be -abc, -abd, or -def} -returnCodes error
+
+test optionHandler-1.7 {} -setup {
+    unset -nocomplain options
+} -body {
+    array set options {-abc 1 -abd 2 -def 3}
+    set words [optionHandler handle {my name ::options} -d 99 -- bar baz]
+    list [lmap name [lsort [array names options]] {array get options $name}] $words
+} -cleanup {
+    log::lvSuppressLE i 1
+} -result {{{-abc 1} {-abd 2} {-def 99}} {bar baz}}
+
+test optionHandler-1.8 {} -setup {
+    unset -nocomplain options
+} -body {
+    array set options {-abc 1 -abd 2 -def 3}
+    set words [optionHandler handle {
+        my name ::options
+        my option -foo
+        my option -bar
+        log::logMsg \$data=$data
+    } -bar 99 -- bar baz]
+    list [lmap name [lsort [array names options]] {array get options $name}] $words
+} -cleanup {
+    log::lvSuppressLE i 1
+} -result {{{-abc 1} {-abd 2} {-bar 99} {-def 3}} {bar baz}}
+
+test optionHandler-1.9 {} -setup {
+    unset -nocomplain options
+} -body {
+    array set options {-abc 1 -abd 2 -def 3}
+    set words [optionHandler handle {
+        my name ::options
+        log::logMsg \$data=$data
+    } -bar 99 -- bar baz]
+    list [lmap name [lsort [array names options]] {array get options $name}] $words
+} -cleanup {
+    log::lvSuppressLE i 1
+} -result {bad option "-bar": must be -abc, -abd, or -def} -returnCodes error
+
+test optionHandler-1.10 {} -setup {
+    unset -nocomplain options
+} -body {
+    array set options {-bar 77}
+    set words [optionHandler handle {
+        my name ::options
+        my option -bar proc {apply {x {return 0}}}
+        log::logMsg \$data=$data
+    } -bar 99 -- bar baz]
+    list [lmap name [lsort [array names options]] {array get options $name}] $words
+} -cleanup {
+    log::lvSuppressLE i 1
+} -result {{{-bar 0}} {bar baz}}
+
+cleanupTests
