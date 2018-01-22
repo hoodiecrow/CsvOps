@@ -18,7 +18,7 @@ proc Script_PolicyInit slave {
 
     interp alias $slave ::log {} ::csvops::log
 
-    if 1 { # msgcat support
+    if no { # msgcat support
         setupMsgcat $slave sv msgs {.. msgs}
     } else {
         interp alias $slave mc $slave format
@@ -64,7 +64,7 @@ proc Debug_PolicyInit slave {
 
     interp alias $slave ::log {} ::csvops::log
 
-    if 1 { # msgcat support
+    if no { # msgcat support
         setupMsgcat $slave sv msgs {.. msgs}
     } else {
         interp alias $slave mc $slave format
@@ -75,9 +75,9 @@ proc Debug_PolicyInit slave {
 
 proc sourceLibrary {slave dir} {
     if {[interp issafe $slave]} {
-        interp eval $slave [list set ssrc [::safe::interpAddToAccessPath $slave [file join $::starkit::topdir $dir]]]
+        interp eval $slave [list set ssrc [::safe::interpAddToAccessPath $slave [file join $::starkit::topdir lib csvops $dir]]]
     } else {
-        interp eval $slave [list set ssrc [file join $::starkit::topdir $dir]]
+        interp eval $slave [list set ssrc [file join $::starkit::topdir lib csvops $dir]]
     }
     interp eval $slave {
         foreach file [glob -nocomplain -directory $ssrc *.tcl] {

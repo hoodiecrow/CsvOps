@@ -2,6 +2,7 @@
 *~
 test*.txt
 l.*.test
+test/temp/*
 
 # Windows image file caches
 Thumbs.db

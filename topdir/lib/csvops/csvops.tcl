@@ -1,12 +1,25 @@
 package provide csvops 1.0
 
 package require log
-interp alias {} mc {} format
+
+# TODO move to main.tcl
+package require conf
+conf msgcat [namespace current]
+conf resource csvops
+
+apply {args {
+    set dir [file dirname [info script]]
+    foreach arg $args {
+        source -encoding utf-8 [file join $dir $arg]
+    }
+}} logging.tcl policy.tcl safe.tcl
+
+#interp alias {} mc {} format
 
 package require fileutil
 package require control
 package require msgcat
-package require options
+package require optionhandler
 
 ::control::control assert enabled 1
 
@@ -17,24 +30,26 @@ oo::objdefine csvops {
 
     method reset {} {
         global options
-        array set options {
-            -alternate 0
-            -rows :
-            -cols {}
-            -separator \;
-            -expand auto
-            -fields {}
-        }
+        set o [OptionHandler new]
+        $o option -alternate default 0 flag 1
+        $o option -rows default :
+        $o option -cols default {}
+        $o option -separator default \;
+        $o option -oseparator
+        $o option -expand default auto
+        $o option -fields default {}
 
-        options flags -alternate
-        options extra -oseparator
-        lassign [options handle $::argv] filename
+        lassign [$o extract ::options {*}$::argv] filename
+        #error [list $::argv $filename]
+        set ::options(-expand) [my -expand-process $::options(-expand)]
 
         lappend init {package require fileutil}
         lappend init [list array set ::options [array get ::options]]
 
         if {$starkit::mode eq "unwrapped"} {
             my RunDebug {*}$init {vwait forever}
+        } elseif {  0  &&  $filename eq ""} {
+            ; # TODO testing
         } else {
             try {
                 cd [file dirname $filename]
@@ -48,8 +63,8 @@ oo::objdefine csvops {
         }
     }
 
-    method runSafe args {
-        log init
+    method RunSafe args {
+        ::csvops::log init
         lappend ::auto_path .
         set int [::safe::interpCreate]
         Script_PolicyInit $int
@@ -60,10 +75,10 @@ oo::objdefine csvops {
         $int eval [list try [lindex $args end] on error msg {error [mc {Failure %s} $msg]}]
 
         ::safe::interpDelete $int
-        if {[log done]} exit
+        if {[::csvops::log done]} exit
     }
 
-    method runDebug args {
+    method RunDebug args {
         set int [interp create]
         Debug_PolicyInit $int
 

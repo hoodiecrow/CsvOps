@@ -1,5 +1,5 @@
 
-namespace eval log {
+namespace eval ::csvops::log {
     namespace export {[a-z]*}
     namespace ensemble create
 

@@ -34,21 +34,27 @@ foreach unit {
 
 ::tcltest::loadTestedCommands
 
-source [file join $::env(USERPROFILE) starkits csvops.kit]
-foreach file [glob -dir [file join $starkit::topdir ssrc] *.tcl] {
+#source [file join H:/starkits csvops.kit]
+namespace eval ::starkit [list variable topdir [file join .. topdir]]
+::tcl::tm::path add [file join $starkit::topdir lib]
+set auto_path [linsert $auto_path 0 [file join $starkit::topdir lib]]
+package require csvops
+
+foreach file [glob -dir [file join .. topdir lib csvops ssrc] *.tcl] {
     source $file
 }
+if no {
 namespace import ::msgcat::mc
 ::msgcat::mclocale sv
 ::msgcat::mcload [file join $::starkit::topdir msgs]
 #::msgcat::mcload [file join $::starkit::topdir .. msgs]
+}
 
 set ::options(-separator) \;
 
 interp alias {} ::log {} ::csvops::log
 
 # NOTE viewFile suppresses ending newline
-
 
 ::tcltest::test colschecker-1.0 {} -constraints {noskip colschecker} -setup {
 } -body {
@@ -325,82 +331,121 @@ unset -nocomplain options
 
 
 ::tcltest::test handleOptions-1.0 {handleOptions:} -constraints handleOptions -setup {
-    set foo {}
+    array set ::foo {}
+    set o [OptionHandler new]
 } -body {
-    # decl: handleOptions args
-    set args [::csvops::handleOptions]
-    list $args [array get options]
+    list [$o extract ::foo {}] [array get ::foo]
 } -cleanup {
     unset foo
-} -result {{} {}}
+    $o destroy
+} -result {{{}} {}}
 
 
 ::tcltest::test handleOptions-1.1 {handleOptions:} -constraints handleOptions -setup {
-    set foo {}
+    array set ::foo {}
+    set o [OptionHandler new]
 } -body {
-    # decl: handleOptions args
-    set args [::csvops::handleOptions -variable foo {foo bar}]
-    list $args [array get options]
+    set args [$o extract ::foo foo bar]
+    list $args [array get ::foo]
 } -cleanup {
     unset foo
+    $o destroy
 } -result {{foo bar} {}}
 
 
 ::tcltest::test handleOptions-1.2 {handleOptions:} -constraints handleOptions -setup {
-    set foo {}
+    array set foo {}
+    set o [OptionHandler new]
 } -body {
     # decl: handleOptions args
-    set args [::csvops::handleOptions -variable foo {-- -foo}]
-    list $args [array get foo]
+    set args [$o extract ::foo -- -foo]
+    list $args [array get ::foo]
 } -cleanup {
     unset foo
+    $o destroy
 } -result {-foo {}}
 
 
 ::tcltest::test handleOptions-1.3 {handleOptions:} -constraints handleOptions -setup {
-    set foo {}
+    array set foo {}
+    set o [OptionHandler new]
 } -body {
     # decl: handleOptions args
-    set args [::csvops::handleOptions -variable foo {-foo}]
+    set args [$o extract ::foo -foo]
     list $args [array get foo]
 } -cleanup {
     unset foo
-} -match glob -result {-foo} -returnCodes error
+    $o destroy
+} -result {{} {-foo {}}}
 
 
 ::tcltest::test handleOptions-1.4 {handleOptions:} -constraints handleOptions -setup {
-    set foo {}
+    # TODO check translation
+    array set foo {}
+    set o [OptionHandler new]
 } -body {
     # decl: handleOptions args
-    set args [::csvops::handleOptions -variable foo -error {m {mc {unknown option %s} $m}} {-foo}]
+    $o option -bar
+    set args [$o extract ::foo -foo]
+    list $args [array get foo]
+} -cleanup {
+    unset foo
+    $o destroy
+} -result {bad option "-foo": must be -bar} -returnCodes error
+
+
+::tcltest::test handleOptions-1.5 {handleOptions:} -constraints {UNSUPPORTED handleOptions} -setup {
+    array set foo {}
+} -body {
+    # decl: handleOptions args
+    set args [$o extract ::foo -error {m {mc {unknown option %s} $m}} {-foo}]
     list $args [array get foo]
 } -cleanup {
     unset foo
 } -match glob -result {ok*nt tillval "-foo"} -returnCodes error
 
 
-::tcltest::test handleOptions-1.5 {handleOptions:} -constraints handleOptions -setup {
-    array set options {-alternate 0 -rows : -cols {} -separator \; -expand auto -fields {}}
-} -body {
-    # decl: handleOptions args
-    set args [::csvops::handleOptions -variable options -flags -alternate -extra -oseparator {-rows a -cols b -separator c -oseparator d -expand auto -fields e -alternate -- -foo}]
-    list $args [lmap name [lsort -dictionary [array names options]] {list $name $options($name)}]
-} -cleanup {
-    unset options
-} -result {-foo {{-alternate 1} {-cols b} {-expand auto} {-fields e} {-oseparator d} {-rows a} {-separator c}}}
-
-
 ::tcltest::test handleOptions-1.6 {handleOptions:} -constraints handleOptions -setup {
-    array set options {-alternate 0 -rows : -cols {} -separator \; -expand auto -fields {}}
+    array set foo {}
+    set o [OptionHandler new]
 } -body {
     # decl: handleOptions args
-    set args [::csvops::handleOptions -variable options -flags -alternate -extra -oseparator {-r a -c b -s c -o d -e a -f e -a -- -foo}]
-    list $args [lmap name [lsort -dictionary [array names options]] {list $name $options($name)}]
+    $o option -alternate default 0 flag 1
+    $o option -rows default :
+    $o option -cols default {}
+    $o option -separator default \;
+    $o option -oseparator
+    $o option -expand default auto
+    $o option -fields default {}
+    set args [$o extract ::foo -rows a -cols b -separator c -oseparator d -expand auto -fields e -alternate -- -foo]
+    list $args [lmap name [lsort -dictionary [array names ::foo]] {list $name $::foo($name)}]
 } -cleanup {
-    unset options
+    unset ::foo
+    $o destroy
 } -result {-foo {{-alternate 1} {-cols b} {-expand auto} {-fields e} {-oseparator d} {-rows a} {-separator c}}}
 
-unset -nocomplain options
+
+::tcltest::test handleOptions-1.7 {handleOptions:} -constraints handleOptions -setup {
+    array set foo {}
+    set o [OptionHandler new]
+} -body {
+    # decl: handleOptions args
+    $o option -alternate default 0 flag 1
+    $o option -rows default :
+    $o option -cols default {}
+    $o option -separator default \;
+    $o option -oseparator
+    $o option -expand default auto
+    $o option -fields default {}
+    set args [$o extract ::foo -r a -c b -s c -o d -e a -f e -a -- -foo]
+    set ::foo(-expand) [::tcl::prefix match {auto empty none} $::foo(-expand)]
+    list $args [lmap name [lsort -dictionary [array names ::foo]] {list $name $::foo($name)}]
+} -cleanup {
+    unset foo
+    $o destroy
+} -result {-foo {{-alternate 1} {-cols b} {-expand auto} {-fields e} {-oseparator d} {-rows a} {-separator c}}}
+
+unset -nocomplain ::foo
 
 ::tcltest::test processor_getRow-1.0 {get:} -constraints {processor_getRow} -setup {
     set r [Reader new -fields {foo bar baz}]
@@ -1330,7 +1375,7 @@ b;89;37;82}
     list $a $b $c
 } -cleanup {
     unset a b c
-} -result {-2 1 2}
+} -result {-2 1 4}
 
 
 ::tcltest::test utils_getdiag_a-1.0 {getdiag_a:} -constraints {utils_getdiag_a} -setup {
@@ -1456,6 +1501,12 @@ Rad 2: v*rde 7 (f*lt F(c)) matchar inte "\[1-4\]"}
     validator belongs-to x foobar
 } -result {}
 
+set STARKITS H:/starkits
+set SANDBOX H:/_a
+if {![file exists $STARKITS]} {
+    set STARKITS [file normalize [file join ~ starkits]]
+    set SANDBOX [file normalize [file join ~ data sandbox]]
+}
 
 ::tcltest::test logging_addMessage-1.0 {addMessage:} -constraints {logging_addMessage} -setup {
     ::tcltest::makeFile "0;foo\n1;snarf\n2;blue" a.csv
@@ -1467,10 +1518,10 @@ Rad 2: v*rde 7 (f*lt F(c)) matchar inte "\[1-4\]"}
     set ::csvops::log::messages
 } -cleanup {
     $r destroy
-} -match glob -result {Reader ::oo::Obj* skapad
-Reader ::oo::Obj* l*ser in "C:/Users/petle5/data/work/csvops/csvops.vfs/test/temp/a.csv"
+} -match glob -result [format {Reader ::oo::Obj* skapad
+Reader ::oo::Obj* l*ser in "%s/__/csvops-1-2018*/test/temp/a.csv"
 Reader ::oo::Obj* 3 rader, 21 bytear inl*sta
-}
+} $SANDBOX]
 
 
 set options(-separator) \;
@@ -1491,10 +1542,10 @@ set options(-separator) \;
 } -cleanup {
     $r destroy
     $w destroy
-} -match glob -result {Reader ::oo::Obj* l*ser in "C:/Users/petle5/data/work/csvops/csvops.vfs/test/temp/a.csv"
+} -match glob -result [format {Reader ::oo::Obj* l*ser in "%1$s/__/csvops-1-2018*/test/temp/a.csv"
 Reader ::oo::Obj* 3 rader, 21 bytear inl*sta
-Writer ::oo::Obj* skriver filen "C:/Users/petle5/data/work/csvops/csvops.vfs/test/temp/w.csv"
-}
+Writer ::oo::Obj* skriver filen "%1$s/__/csvops-1-2018*/test/temp/w.csv"
+} $SANDBOX]
 
 
 ::tcltest::test logging_addMessage-1.2 {} -constraints {logging_addMessage} -setup {
@@ -1510,10 +1561,10 @@ Writer ::oo::Obj* skriver filen "C:/Users/petle5/data/work/csvops/csvops.vfs/tes
     set ::csvops::log::messages
 } -cleanup {
     $t destroy
-} -match glob -result {Presentation ::oo::Obj* skapad
+} -match glob -result [format {Presentation ::oo::Obj* skapad
 PresentationWriter ::oo::Obj* skapad
-PresentationWriter ::oo::Obj* skriver filen "C:/Users/petle5/data/work/csvops/csvops.vfs/test/temp/foo.csv" med formatet CSV
-}
+PresentationWriter ::oo::Obj* skriver filen "%s/__/csvops-1-2018*/test/temp/foo.csv" med formatet CSV
+} $SANDBOX]
 
 
 ::tcltest::test logging_addMessage-1.3 {} -constraints {logging_addMessage} -setup {
@@ -1529,10 +1580,10 @@ PresentationWriter ::oo::Obj* skriver filen "C:/Users/petle5/data/work/csvops/cs
     set ::csvops::log::messages
 } -cleanup {
     $t destroy
-} -match glob -result {Presentation ::oo::Obj* skapad
+} -match glob -result [format {Presentation ::oo::Obj* skapad
 PresentationWriter ::oo::Obj* skapad
-PresentationWriter ::oo::Obj* skriver filen "C:/Users/petle5/data/work/csvops/csvops.vfs/test/temp/foo.html" med formatet HTML
-}
+PresentationWriter ::oo::Obj* skriver filen "%s/__/csvops-1-2018*/test/temp/foo.html" med formatet HTML
+} $SANDBOX]
 
 
 ::tcltest::test logging_setLabel-1.0 {setLabel:} -constraints {logging_setLabel} -setup {
@@ -2020,7 +2071,7 @@ foreach file [glob -dir [file join $starkit::topdir _src] *.tcl] {
     ::tcltest::makeFile "a;b;c;d\n1;2;3;4" a.csv
     ::tcltest::makeFile "5;6;7;8\n6;7;8;5" b.csv
     set r [Result new]
-    set t [$r read a.csv]
+    set t [$r read [file join [::tcltest::configure -tmpdir] a.csv]]
     list [$t getFieldNames] [$t getData]
 } -cleanup {
     $r destroy
@@ -2033,7 +2084,7 @@ foreach file [glob -dir [file join $starkit::topdir _src] *.tcl] {
     ::tcltest::makeFile "a;b;c;d\n1;2;3;4" a.csv
     ::tcltest::makeFile "5;6;7;8\n6;7;8;5" b.csv
     set r [Result new]
-    set t [$r read a.csv b.csv]
+    set t [$r read [file join [::tcltest::configure -tmpdir] a.csv] [file join [::tcltest::configure -tmpdir] b.csv]]
     list [$t getFieldNames] [$t getData]
 } -cleanup {
     $r destroy
@@ -2054,7 +2105,7 @@ foreach file [glob -dir [file join $starkit::topdir _src] *.tcl] {
 } -body {
     ::tcltest::makeFile "a;b;c;d\n1;2;3;4" a.csv
     ::tcltest::makeFile "5;6;7;8\n6;7;8;5" b.csv
-    set v [View new a.csv]
+    set v [View new [file join [::tcltest::configure -tmpdir] a.csv]]
     $v serialize
 } -cleanup {
     $v destroy
@@ -2065,7 +2116,7 @@ foreach file [glob -dir [file join $starkit::topdir _src] *.tcl] {
 } -body {
     ::tcltest::makeFile "a;b;c;d\n1;2;3;4" a.csv
     ::tcltest::makeFile "5;6;7;8\n6;7;8;5" b.csv
-    set v [View new a.csv b.csv]
+    set v [View new [file join [::tcltest::configure -tmpdir] a.csv] [file join [::tcltest::configure -tmpdir] b.csv]]
     $v serialize
 } -cleanup {
     $v destroy
@@ -2506,7 +2557,7 @@ foreach file [glob -dir [file join $starkit::topdir _src] *.tcl] {
 } -body {
     ::tcltest::makeFile "a;b;c;d\n1;2;3;4" a.csv
     ::tcltest::makeFile "5;6;7;8\n6;7;8;5" b.csv
-    set v [View new a.csv]
+    set v [View new [file join [::tcltest::configure -tmpdir] a.csv]]
     $v serialize
 } -cleanup {
     $v destroy
@@ -2517,7 +2568,7 @@ foreach file [glob -dir [file join $starkit::topdir _src] *.tcl] {
 } -body {
     ::tcltest::makeFile "a;b;c;d\n1;2;3;4" a.csv
     ::tcltest::makeFile "5;6;7;8\n6;7;8;5" b.csv
-    set v [View new a.csv b.csv]
+    set v [View new [file join [::tcltest::configure -tmpdir] a.csv] [file join [::tcltest::configure -tmpdir] b.csv]]
     $v serialize
 } -cleanup {
     $v destroy
