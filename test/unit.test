@@ -20,9 +20,8 @@ foreach unit {
     validator_matches validator_matchesOrIsEmpty validator_belongsTo
     logging_setLabel logging_addMessage
     
-    result_create result_setFieldNames result_getFieldNames result_getData
     result_union result_intersect result_except result_union_all
-    result_distinct result_unique result_limit result_order_by result_select
+    result_distinct result_unique result_limit result_order_by
     result_read
     
     view_create view_set_header view_getFieldNames view_get_rows view_union
@@ -31,6 +30,14 @@ foreach unit {
 } {
     ::tcltest::testConstraint $unit 1
 }
+
+if no {
+    result_create result_getFieldNames 
+    result_getData
+    result_select
+}
+
+    package require sqlite3
 
 ::tcltest::loadTestedCommands
 
@@ -102,64 +109,37 @@ interp alias {} ::log {} ::csvops::log
 
 
 ::tcltest::test utils_dbjoin-1.0 {inner join} -constraints utils_dbjoin -setup {
-    set r [Reader new -fields {foo bar}]
-    set s [Reader new -fields {foo bar}]
     ::tcltest::makeFile "0;foo\n1;snarf\n2;blue" a.csv
     ::tcltest::makeFile "0;bagel\n1;snatz\n3;driver" b.csv
-    $r read [file join [::tcltest::configure -tmpdir] a.csv]
-    $s read [file join [::tcltest::configure -tmpdir] b.csv]
-    set w [Writer new -fields {foo bar}]
-    ::tcltest::makeFile {} output.csv
+    set r [DB new]
+    $r makeTable t1 {{foo int} bar} [$r read [file join [::tcltest::configure -tmpdir] a.csv]]
+    $r makeTable t2 {{foo int} bar} [$r read [file join [::tcltest::configure -tmpdir] b.csv]]
 } -body {
-    dbjoin $r $s $w
-    $w write [file join [::tcltest::configure -tmpdir] output.csv]
-    ::tcltest::viewFile [file join [::tcltest::configure -tmpdir] output.csv]
+    set w {}
+    $r eval {SELECT t1.foo AS a, t1.bar AS b, t2.foo AS c, t2.bar AS d FROM t1 INNER JOIN t2 ON t1.foo = t2.foo} {
+        lappend w "$a;$b;$c;$d"
+    }
+    join $w \n
 } -cleanup {
     $r destroy
-    $s destroy
-    $w destroy
 } -result {0;foo;0;bagel
 1;snarf;1;snatz}
 
 
-::tcltest::test utils_dbjoin-1.1 {inner join (explicit)} -constraints utils_dbjoin -setup {
-    set r [Reader new -fields {foo bar}]
-    set s [Reader new -fields {foo bar}]
+::tcltest::test utils_dbjoin-1.1 {left outer join} -constraints utils_dbjoin -setup {
     ::tcltest::makeFile "0;foo\n1;snarf\n2;blue" a.csv
     ::tcltest::makeFile "0;bagel\n1;snatz\n3;driver" b.csv
-    $r read [file join [::tcltest::configure -tmpdir] a.csv]
-    $s read [file join [::tcltest::configure -tmpdir] b.csv]
-    set w [Writer new -fields {foo bar}]
-    ::tcltest::makeFile {} output.csv
+    set r [DB new]
+    $r makeTable t1 {{foo int} bar} [$r read [file join [::tcltest::configure -tmpdir] a.csv]]
+    $r makeTable t2 {{foo int} bar} [$r read [file join [::tcltest::configure -tmpdir] b.csv]]
 } -body {
-    dbjoin inner $r $s $w
-    $w write [file join [::tcltest::configure -tmpdir] output.csv]
-    ::tcltest::viewFile [file join [::tcltest::configure -tmpdir] output.csv]
+    set w {}
+    $r eval {SELECT t1.foo AS a, t1.bar AS b, t2.foo AS c, t2.bar AS d FROM t1 LEFT JOIN t2 ON t1.foo = t2.foo} {
+        lappend w "$a;$b;$c;$d"
+    }
+    join $w \n
 } -cleanup {
     $r destroy
-    $s destroy
-    $w destroy
-} -result {0;foo;0;bagel
-1;snarf;1;snatz}
-
-
-::tcltest::test utils_dbjoin-1.2 {left outer join} -constraints utils_dbjoin -setup {
-    set r [Reader new -fields {foo bar}]
-    set s [Reader new -fields {foo bar}]
-    ::tcltest::makeFile "0;foo\n1;snarf\n2;blue" a.csv
-    ::tcltest::makeFile "0;bagel\n1;snatz\n3;driver" b.csv
-    $r read [file join [::tcltest::configure -tmpdir] a.csv]
-    $s read [file join [::tcltest::configure -tmpdir] b.csv]
-    set w [Writer new -fields {foo bar}]
-    ::tcltest::makeFile {} output.csv
-} -body {
-    dbjoin left $r $s $w
-    $w write [file join [::tcltest::configure -tmpdir] output.csv]
-    ::tcltest::viewFile [file join [::tcltest::configure -tmpdir] output.csv]
-} -cleanup {
-    $r destroy
-    $s destroy
-    $w destroy
 } -result {0;foo;0;bagel
 1;snarf;1;snatz
 2;blue;;}
@@ -1519,7 +1499,7 @@ if {![file exists $STARKITS]} {
 } -cleanup {
     $r destroy
 } -match glob -result [format {Reader ::oo::Obj* skapad
-Reader ::oo::Obj* l*ser in "%s/__/csvops-1-2018*/test/temp/a.csv"
+Reader ::oo::Obj* l*ser in "%s/__/csvops-2-2018*/test/temp/a.csv"
 Reader ::oo::Obj* 3 rader, 21 bytear inl*sta
 } $SANDBOX]
 
@@ -1542,9 +1522,9 @@ set options(-separator) \;
 } -cleanup {
     $r destroy
     $w destroy
-} -match glob -result [format {Reader ::oo::Obj* l*ser in "%1$s/__/csvops-1-2018*/test/temp/a.csv"
+} -match glob -result [format {Reader ::oo::Obj* l*ser in "%1$s/__/csvops-2-2018*/test/temp/a.csv"
 Reader ::oo::Obj* 3 rader, 21 bytear inl*sta
-Writer ::oo::Obj* skriver filen "%1$s/__/csvops-1-2018*/test/temp/w.csv"
+Writer ::oo::Obj* skriver filen "%1$s/__/csvops-2-2018*/test/temp/w.csv"
 } $SANDBOX]
 
 
@@ -1563,7 +1543,7 @@ Writer ::oo::Obj* skriver filen "%1$s/__/csvops-1-2018*/test/temp/w.csv"
     $t destroy
 } -match glob -result [format {Presentation ::oo::Obj* skapad
 PresentationWriter ::oo::Obj* skapad
-PresentationWriter ::oo::Obj* skriver filen "%s/__/csvops-1-2018*/test/temp/foo.csv" med formatet CSV
+PresentationWriter ::oo::Obj* skriver filen "%s/__/csvops-2-2018*/test/temp/foo.csv" med formatet CSV
 } $SANDBOX]
 
 
@@ -1582,7 +1562,7 @@ PresentationWriter ::oo::Obj* skriver filen "%s/__/csvops-1-2018*/test/temp/foo.
     $t destroy
 } -match glob -result [format {Presentation ::oo::Obj* skapad
 PresentationWriter ::oo::Obj* skapad
-PresentationWriter ::oo::Obj* skriver filen "%s/__/csvops-1-2018*/test/temp/foo.html" med formatet HTML
+PresentationWriter ::oo::Obj* skriver filen "%s/__/csvops-2-2018*/test/temp/foo.html" med formatet HTML
 } $SANDBOX]
 
 
@@ -1661,37 +1641,6 @@ foreach file [glob -dir [file join $starkit::topdir _src] *.tcl] {
 } -match glob -result {{a b c} {{1 2 3} {4 5 6}}}
 
 
-::tcltest::test result_setFieldNames-1.0 {result_setFieldNames:} -constraints {result_setFieldNames} -setup {
-} -body {
-    set r [Result new {a b c} {{1 2 3} {4 5 6}}]
-    $r setFieldNames z y x w v
-    list [$r getFieldNames] [$r getData]
-} -cleanup {
-    $r destroy
-} -match glob -result {{z y x w v} {{1 2 3 {} {}} {4 5 6 {} {}}}}
-
-
-::tcltest::test result_setFieldNames-1.1 {result_setFieldNames:} -constraints {result_setFieldNames} -setup {
-} -body {
-    set r [Result new {a b c} {{1 2 3} {4 5 6}}]
-    $r setFieldNames z y x w v
-    $r setFieldNames a b
-    list [$r getFieldNames] [$r getData]
-} -cleanup {
-    $r destroy
-} -match glob -result {{a b {} {} {}} {{1 2 3 {} {}} {4 5 6 {} {}}}}
-
-
-::tcltest::test result_setFieldNames-1.2 {result_setFieldNames:} -constraints {result_setFieldNames} -setup {
-} -body {
-    set r [Result new]
-    $r setFieldNames a b c
-    list [$r getFieldNames] [$r getData]
-} -cleanup {
-    $r destroy
-} -match glob -result {{a b c} {}}
-
-
 ::tcltest::test result_getFieldNames-1.0 {result_getFieldNames:} -constraints {result_getFieldNames} -setup {
 } -body {
     set r [Result new]
@@ -1746,323 +1695,300 @@ foreach file [glob -dir [file join $starkit::topdir _src] *.tcl] {
 } -match glob -result {{1 2 3} {4 5 6}}
 
 
-::tcltest::test result_union-1.0 {result_union:} -constraints {result_union} -setup {
+#    set r [Result new db {{a int} {b int} {c int}} {{1 2 3} {4 5 6}}]
+
+::tcltest::test result_union-1.0 {
+    result_union:
+    Note: result changed in 2-20180122 from
+    {a b c} {{3 1 2} {2 3 1} {1 2 3} {5 6 4} {4 5 6}}
+    to
+    {a b c} {{1 2 3} {2 3 1} {3 1 2} {4 5 6} {5 6 4}}
+} -constraints {result_union} -setup {
+    sqlite3 db :memory:
 } -body {
-    set r [Result new {a b c} {{1 2 3} {2 3 1} {3 1 2} {3 1 2}}]
-    set s [Result new {a b c} {{4 5 6} {5 6 4} {4 5 6}}]
-    set t [$r union $s]
-    list [$t getFieldNames] [$t getData]
+    set r [Result new db t1 {{a int} {b int} {c int}} {{1 2 3} {2 3 1} {3 1 2} {3 1 2}}]
+    $r makeTable t2 {{a int} {b int} {c int}} {{4 5 6} {5 6 4} {4 5 6}}
+    set t [db eval {SELECT * FROM t1 UNION SELECT * FROM t2}]
+    list {a b c} [lmap {a b c} $t {list $a $b $c}]
 } -cleanup {
     $r destroy
-    $s destroy
-    $t destroy
-} -match glob -result {{a b c} {{3 1 2} {2 3 1} {1 2 3} {5 6 4} {4 5 6}}}
+    db close
+} -match glob -result {{a b c} {{1 2 3} {2 3 1} {3 1 2} {4 5 6} {5 6 4}}}
 
 
-::tcltest::test result_union-1.1 {sqlite3 union} -constraints {result_union} -setup {
-} -body {
-    package require sqlite3
+::tcltest::test result_union-1.1 {
+    result_union:
+    create both tables
+} -constraints {result_union} -setup {
     sqlite3 db :memory:
-    set r [Result new {a b c} {{1 2 3} {2 3 1} {3 1 2} {3 1 2}}]
-    db eval {CREATE TABLE t1(a int, b int, c int)}
-    foreach row [$r getData] {
-        db eval "INSERT INTO t1 VALUES([join $row ,])"
-    }
-    set s [Result new {a b c} {{4 5 6} {5 6 4} {4 5 6}}]
-    db eval {CREATE TABLE t2(a int, b int, c int)}
-    foreach row [$s getData] {
-        db eval "INSERT INTO t2 VALUES([join $row ,])"
-    }
+} -body {
+    set r [Result new db]
+    $r makeTable t1 {{a int} {b int} {c int}} {{1 2 3} {2 3 1} {3 1 2} {3 1 2}}
+    $r makeTable t2 {{a int} {b int} {c int}} {{4 5 6} {5 6 4} {4 5 6}}
     set t [db eval {SELECT * FROM t1 UNION SELECT * FROM t2}]
     list {a b c} [lmap {a b c} $t {list $a $b $c}]
 } -cleanup {
+    $r destroy
     db close
-} -match glob -result {{a b c} {{3 1 2} {2 3 1} {1 2 3} {5 6 4} {4 5 6}}}
+} -match glob -result {{a b c} {{1 2 3} {2 3 1} {3 1 2} {4 5 6} {5 6 4}}}
 
 
-::tcltest::test result_union-1.2 {sqlite3 union} -constraints {result_union} -setup {
-} -body {
-    package require sqlite3
+::tcltest::test result_union-1.2 {
+    result_union:
+    create both tables
+} -constraints {result_union} -setup {
     sqlite3 db :memory:
-    db eval {CREATE TABLE t1(a int, b int, c int)}
-    db eval {INSERT INTO t1 VALUES(1, 2, 3)}
-    db eval {INSERT INTO t1 VALUES(2, 3, 1)}
-    db eval {INSERT INTO t1 VALUES(3, 1, 2)}
-    db eval {INSERT INTO t1 VALUES(3,1,2)}
-    db eval {
-        CREATE TABLE t2(a int, b int, c int);
-        INSERT INTO t2 VALUES(4, 5, 6);
-        INSERT INTO t2 VALUES(5, 6, 4);
-        INSERT INTO t2 VALUES(4, 5, 6);
-    }
-    set t [db eval {SELECT * FROM t1 UNION SELECT * FROM t2}]
+} -body {
+    set r [Result new db]
+    set a t1
+    $r makeTable $a {{a int} {b int} {c int}} {{1 2 3} {2 3 1} {3 1 2} {3 1 2}}
+    set b t2
+    $r makeTable $b {{a int} {b int} {c int}} {{4 5 6} {5 6 4} {4 5 6}}
+    set t [db eval "SELECT * FROM $a UNION SELECT * FROM $b"]
     list {a b c} [lmap {a b c} $t {list $a $b $c}]
 } -cleanup {
+    $r destroy
     db close
-} -match glob -result {{a b c} {{3 1 2} {2 3 1} {1 2 3} {5 6 4} {4 5 6}}}
+} -match glob -result {{a b c} {{1 2 3} {2 3 1} {3 1 2} {4 5 6} {5 6 4}}}
 
 
 ::tcltest::test result_intersect-1.0 {result_intersect:} -constraints {result_intersect} -setup {
+    sqlite3 db :memory:
 } -body {
-    set r [Result new {a b c} {{1 2 3} {2 3 1} {3 1 2} {3 1 2}}]
-    set s [Result new {a b c} {{4 5 6} {5 6 4} {4 5 6}}]
-    set t [$r intersect $s]
-    list [$t getFieldNames] [$t getData]
+    set r [Result new db]
+    set a t1
+    $r makeTable $a {{a int} {b int} {c int}} {{1 2 3} {2 3 1} {3 1 2} {3 1 2}}
+    set b t2
+    $r makeTable $b {{a int} {b int} {c int}} {{4 5 6} {5 6 4} {4 5 6}}
+    set t [db eval "SELECT * FROM $a INTERSECT SELECT * FROM $b"]
+    list {a b c} [lmap {a b c} $t {list $a $b $c}]
 } -cleanup {
     $r destroy
-    $s destroy
-    $t destroy
+    db close
 } -match glob -result {{a b c} {}}
 
 
 ::tcltest::test result_intersect-1.1 {result_intersect:} -constraints {result_intersect} -setup {
+    sqlite3 db :memory:
 } -body {
-    set r [Result new {a b c} {{1 2 3} {2 3 1} {3 1 2} {3 1 2}}]
-    set s [Result new {a b c} {{2 3 1} {2 3 1} {3 2 1}}]
-    set t [$r intersect $s]
-    list [$t getFieldNames] [$t getData]
+    set r [Result new db]
+    set a t1
+    $r makeTable $a {{a int} {b int} {c int}} {{1 2 3} {2 3 1} {3 1 2} {3 1 2}}
+    set b t2
+    $r makeTable $b {{a int} {b int} {c int}} {{2 3 1} {2 3 1} {3 2 1}}
+    set t [db eval "SELECT * FROM $a INTERSECT SELECT * FROM $b"]
+    list {a b c} [lmap {a b c} $t {list $a $b $c}]
 } -cleanup {
     $r destroy
-    $s destroy
-    $t destroy
+    db close
 } -match glob -result {{a b c} {{2 3 1}}}
 
 
 ::tcltest::test result_except-1.0 {result_except:} -constraints {result_except} -setup {
+    sqlite3 db :memory:
 } -body {
-    set r [Result new {a b c} {{1 2 3} {2 3 1} {3 1 2} {3 1 2}}]
-    set s [Result new {a b c} {{4 5 6} {5 6 4} {4 5 6}}]
-    set t [$r except $s]
-    list [$t getFieldNames] [$t getData]
+    set r [Result new db]
+    set a t1
+    $r makeTable $a {{a int} {b int} {c int}} {{1 2 3} {2 3 1} {3 1 2} {3 1 2}}
+    set b t2
+    $r makeTable $b {{a int} {b int} {c int}} {{4 5 6} {5 6 4} {4 5 6}}
+    set t [db eval "SELECT * FROM $a EXCEPT SELECT * FROM $b"]
+    list {a b c} [lmap {a b c} $t {list $a $b $c}]
 } -cleanup {
     $r destroy
-    $s destroy
-    $t destroy
-} -match glob -result {{a b c} {{3 1 2} {2 3 1} {1 2 3}}}
+    db close
+} -result {{a b c} {{1 2 3} {2 3 1} {3 1 2}}}
 
 
 ::tcltest::test result_except-1.1 {result_except:} -constraints {result_except} -setup {
+    sqlite3 db :memory:
 } -body {
-    set r [Result new {a b c} {{1 2 3} {2 3 1} {3 1 2} {3 1 2}}]
-    set s [Result new {a b c} {{2 3 1} {2 3 1} {3 2 1}}]
-    set t [$r except $s]
-    list [$t getFieldNames] [$t getData]
+    set r [Result new db]
+    set a t1
+    $r makeTable $a {{a int} {b int} {c int}} {{1 2 3} {2 3 1} {3 1 2} {3 1 2}}
+    set b t2
+    $r makeTable $b {{a int} {b int} {c int}} {{2 3 1} {2 3 1} {3 2 1}}
+    set t [db eval "SELECT * FROM $a EXCEPT SELECT * FROM $b"]
+    list {a b c} [lmap {a b c} $t {list $a $b $c}]
 } -cleanup {
     $r destroy
-    $s destroy
-    $t destroy
-} -match glob -result {{a b c} {{3 1 2} {1 2 3}}}
+    db close
+} -result {{a b c} {{1 2 3} {3 1 2}}}
 
 
 ::tcltest::test result_union_all-1.0 {result_union_all:} -constraints {result_union_all} -setup {
+    sqlite3 db :memory:
 } -body {
-    set r [Result new {a b c} {{1 2 3} {2 3 1} {3 1 2} {3 1 2}}]
-    set s [Result new {a b c} {{4 5 6} {5 6 4} {4 5 6}}]
-    set t [$r union-all $s]
-    list [$t getFieldNames] [$t getData]
+    set r [Result new db]
+    set a t1
+    $r makeTable $a {{a int} {b int} {c int}} {{1 2 3} {2 3 1} {3 1 2} {3 1 2}}
+    set b t2
+    $r makeTable $b {{a int} {b int} {c int}} {{4 5 6} {5 6 4} {4 5 6}}
+    set t [db eval "SELECT * FROM $a UNION ALL SELECT * FROM $b"]
+    list {a b c} [lmap {a b c} $t {list $a $b $c}]
 } -cleanup {
     $r destroy
-    $s destroy
-    $t destroy
-} -match glob -result {{a b c} {{1 2 3} {2 3 1} {3 1 2} {3 1 2} {4 5 6} {5 6 4} {4 5 6}}}
+    db close
+} -result {{a b c} {{1 2 3} {2 3 1} {3 1 2} {3 1 2} {4 5 6} {5 6 4} {4 5 6}}}
 
 
 ::tcltest::test result_union_all-1.1 {result_union_all:} -constraints {result_union_all} -setup {
+    sqlite3 db :memory:
 } -body {
-    set r [Result new {a b c} {{1 2 3} {2 3 1} {3 1 2} {3 1 2}}]
-    set s [Result new {a b c} {}]
-    set t [$r union-all $s]
-    list [$t getFieldNames] [$t getData]
+    set r [Result new db]
+    set a t1
+    $r makeTable $a {{a int} {b int} {c int}} {{1 2 3} {2 3 1} {3 1 2} {3 1 2}}
+    set b t2
+    $r makeTable $b {{a int} {b int} {c int}} {}
+    set t [db eval "SELECT * FROM $a UNION ALL SELECT * FROM $b"]
+    list {a b c} [lmap {a b c} $t {list $a $b $c}]
 } -cleanup {
     $r destroy
-    $s destroy
-    $t destroy
-} -match glob -result {{a b c} {{1 2 3} {2 3 1} {3 1 2} {3 1 2}}}
+    db close
+} -result {{a b c} {{1 2 3} {2 3 1} {3 1 2} {3 1 2}}}
 
 
 ::tcltest::test result_union_all-1.2 {result_union_all:} -constraints {result_union_all} -setup {
+    sqlite3 db :memory:
 } -body {
-    set r [Result new {a b c} {}]
-    set s [Result new {a b c} {{4 5 6} {5 6 4} {4 5 6}}]
-    set t [$r union-all $s]
-    list [$t getFieldNames] [$t getData]
+    set r [Result new db]
+    set a t1
+    $r makeTable $a {{a int} {b int} {c int}} {}
+    set b t2
+    $r makeTable $b {{a int} {b int} {c int}} {{4 5 6} {5 6 4} {4 5 6}}
+    set t [db eval "SELECT * FROM $a UNION ALL SELECT * FROM $b"]
+    list {a b c} [lmap {a b c} $t {list $a $b $c}]
 } -cleanup {
     $r destroy
-    $s destroy
-    $t destroy
-} -match glob -result {{a b c} {{4 5 6} {5 6 4} {4 5 6}}}
+    db close
+} -result {{a b c} {{4 5 6} {5 6 4} {4 5 6}}}
 
 
 ::tcltest::test result_distinct-1.0 {result_distinct:} -constraints {result_distinct} -setup {
+    sqlite3 db :memory:
 } -body {
-    set r [Result new {a b c} {{1 2 3} {2 3 1} {3 1 2} {3 1 2} {1 3 2}}]
-    set t [$r distinct]
-    list [$t getFieldNames] [$t getData]
+    set r [Result new db]
+    set a t1
+    $r makeTable $a {{a int} {b int} {c int}} {{1 2 3} {2 3 1} {3 1 2} {3 1 2} {1 3 2}}
+    set t [db eval "SELECT DISTINCT * FROM $a"]
+    list {a b c} [lmap {a b c} $t {list $a $b $c}]
 } -cleanup {
     $r destroy
-    $t destroy
-} -match glob -result {{a b c} {{1 3 2} {3 1 2} {2 3 1} {1 2 3}}}
+    db close
+} -result {{a b c} {{1 2 3} {2 3 1} {3 1 2} {1 3 2}}}
 
 
 ::tcltest::test result_unique-1.0 {result_unique:} -constraints {result_unique} -setup {
+    sqlite3 db :memory:
 } -body {
-    set r [Result new {a b c} {{1 2 3} {2 3 1} {3 1 2} {3 1 2} {1 3 2}}]
-    set t [$r unique a]
-    list [$t getFieldNames] [$t getData]
+    set r [Result new db]
+    set a t1
+    $r makeTable $a {{a int} {b int} {c int}} {{1 2 3} {2 3 1} {3 1 2} {3 1 2} {1 3 2}}
+    set t [db eval "SELECT DISTINCT a FROM $a"]
+    list {a b c} [lmap {a b c} $t {list $a $b $c}]
 } -cleanup {
     $r destroy
-    $t destroy
-} -match glob -result {{a b c} {{1 3 2} {2 3 1} {3 1 2}}}
+    db close
+} -result {{a b c} {{1 2 3}}}
 
 
 ::tcltest::test result_limit-1.0 {result_limit:} -constraints {result_limit} -setup {
+    sqlite3 db :memory:
 } -body {
-    set r [Result new {a b} {{1 2} {3 4} {5 6} {7 8} {9 0} {2 1} {4 3} {6 5} {8 7} {0 9}}]
-    set t [$r limit 0]
-    list [$t getFieldNames] [$t getData]
+    set r [Result new db]
+    set a t1
+    $r makeTable $a {{a int} {b int}} {{1 2} {3 4} {5 6} {7 8} {9 0} {2 1} {4 3} {6 5} {8 7} {0 9}}
+    set t [db eval "SELECT * FROM $a LIMIT 0"]
+    list {a b} [lmap {a b} $t {list $a $b}]
 } -cleanup {
     $r destroy
-    $t destroy
-} -match glob -result {{a b} {}}
+    db close
+} -result {{a b} {}}
 
 
 ::tcltest::test result_limit-1.1 {result_limit:} -constraints {result_limit} -setup {
+    sqlite3 db :memory:
 } -body {
-    set r [Result new {a b} {{1 2} {3 4} {5 6} {7 8} {9 0} {2 1} {4 3} {6 5} {8 7} {0 9}}]
-    set t [$r limit 1]
-    list [$t getFieldNames] [$t getData]
+    set r [Result new db]
+    set a t1
+    $r makeTable $a {{a int} {b int}} {{1 2} {3 4} {5 6} {7 8} {9 0} {2 1} {4 3} {6 5} {8 7} {0 9}}
+    set t [db eval "SELECT * FROM $a LIMIT 1"]
+    list {a b} [lmap {a b} $t {list $a $b}]
 } -cleanup {
     $r destroy
-    $t destroy
-} -match glob -result {{a b} {{1 2}}}
+    db close
+} -result {{a b} {{1 2}}}
 
 
 ::tcltest::test result_limit-1.2 {result_limit:} -constraints {result_limit} -setup {
+    sqlite3 db :memory:
 } -body {
-    set r [Result new {a b} {{1 2} {3 4} {5 6} {7 8} {9 0} {2 1} {4 3} {6 5} {8 7} {0 9}}]
-    set t [$r limit 5]
-    list [$t getFieldNames] [$t getData]
+    set r [Result new db]
+    set a t1
+    $r makeTable $a {{a int} {b int}} {{1 2} {3 4} {5 6} {7 8} {9 0} {2 1} {4 3} {6 5} {8 7} {0 9}}
+    set t [db eval "SELECT * FROM $a LIMIT 5"]
+    list {a b} [lmap {a b} $t {list $a $b}]
 } -cleanup {
     $r destroy
-    $t destroy
-} -match glob -result {{a b} {{1 2} {3 4} {5 6} {7 8} {9 0}}}
+    db close
+} -result {{a b} {{1 2} {3 4} {5 6} {7 8} {9 0}}}
 
 
 ::tcltest::test result_limit-1.3 {result_limit:} -constraints {result_limit} -setup {
+    sqlite3 db :memory:
 } -body {
-    set r [Result new {a b} {{1 2} {3 4} {5 6} {7 8} {9 0} {2 1} {4 3} {6 5} {8 7} {0 9}}]
-    set t [$r limit all]
-    list [$t getFieldNames] [$t getData]
+    set r [Result new db]
+    set a t1
+    $r makeTable $a {{a int} {b int}} {{1 2} {3 4} {5 6} {7 8} {9 0} {2 1} {4 3} {6 5} {8 7} {0 9}}
+    # number to skip, number to list
+    set t [db eval "SELECT * FROM $a LIMIT 3,3"]
+    list {a b} [lmap {a b} $t {list $a $b}]
 } -cleanup {
     $r destroy
-    $t destroy
-} -match glob -result {{a b} {{1 2} {3 4} {5 6} {7 8} {9 0} {2 1} {4 3} {6 5} {8 7} {0 9}}}
-
-
-::tcltest::test result_limit-1.4 {result_limit:} -constraints {result_limit} -setup {
-} -body {
-    set r [Result new {a b} {{1 2} {3 4} {5 6} {7 8} {9 0} {2 1} {4 3} {6 5} {8 7} {0 9}}]
-    set t [$r limit all-1]
-    list [$t getFieldNames] [$t getData]
-} -cleanup {
-    $r destroy
-    $t destroy
-} -match glob -result {{a b} {{1 2} {3 4} {5 6} {7 8} {9 0} {2 1} {4 3} {6 5} {8 7}}}
-
-
-::tcltest::test result_limit-1.5 {result_limit:} -constraints {result_limit} -setup {
-} -body {
-    set r [Result new {a b} {{1 2} {3 4} {5 6} {7 8} {9 0} {2 1} {4 3} {6 5} {8 7} {0 9}}]
-    set t [$r limit all-2]
-    list [$t getFieldNames] [$t getData]
-} -cleanup {
-    $r destroy
-    $t destroy
-} -match glob -result {{a b} {{1 2} {3 4} {5 6} {7 8} {9 0} {2 1} {4 3} {6 5}}}
-
-
-::tcltest::test result_limit-1.6 {result_limit:} -constraints {result_limit} -setup {
-} -body {
-    set r [Result new {a b} {{1 2} {3 4} {5 6} {7 8} {9 0} {2 1} {4 3} {6 5} {8 7} {0 9}}]
-    set t [$r limit 0 3]
-    list [$t getFieldNames] [$t getData]
-} -cleanup {
-    $r destroy
-    $t destroy
-} -match glob -result {{a b} {{1 2} {3 4} {5 6}}}
-
-
-::tcltest::test result_limit-1.7 {result_limit:} -constraints {result_limit} -setup {
-} -body {
-    set r [Result new {a b} {{1 2} {3 4} {5 6} {7 8} {9 0} {2 1} {4 3} {6 5} {8 7} {0 9}}]
-    set t [$r limit 1 3]
-    list [$t getFieldNames] [$t getData]
-} -cleanup {
-    $r destroy
-    $t destroy
-} -match glob -result {{a b} {{1 2} {3 4} {5 6} {7 8}}}
-
-
-::tcltest::test result_limit-1.8 {result_limit:} -constraints {result_limit} -setup {
-} -body {
-    set r [Result new {a b} {{1 2} {3 4} {5 6} {7 8} {9 0} {2 1} {4 3} {6 5} {8 7} {0 9}}]
-    set t [$r limit 5 3]
-    list [$t getFieldNames] [$t getData]
-} -cleanup {
-    $r destroy
-    $t destroy
-} -match glob -result {{a b} {{1 2} {3 4} {5 6} {7 8} {9 0} {2 1} {4 3} {6 5}}}
-
-
-::tcltest::test result_limit-1.9 {result_limit:} -constraints {result_limit} -setup {
-} -body {
-    set r [Result new {a b} {{1 2} {3 4} {5 6} {7 8} {9 0} {2 1} {4 3} {6 5} {8 7} {0 9}}]
-    set t [$r limit all 3]
-    list [$t getFieldNames] [$t getData]
-} -cleanup {
-    $r destroy
-    $t destroy
-} -match glob -result {{a b} {{1 2} {3 4} {5 6} {7 8} {9 0} {2 1} {4 3} {6 5} {8 7} {0 9}}}
+    db close
+} -result {{a b} {{7 8} {9 0} {2 1}}}
 
 
 ::tcltest::test result_order_by-1.0 {result_order_by:} -constraints {result_order_by} -setup {
+    sqlite3 db :memory:
 } -body {
-    set r [Result new {a b} {{2 a} {11 a} {1 b} {2 b} {11 A} {1 A}}]
-    $r order-by {a -integer} {b -nocase}
-    list [$r getFieldNames] [$r getData]
+    set r [Result new db]
+    set a t1
+    $r makeTable $a {{a int} {b char}} {{2 a} {11 a} {1 b} {2 b} {11 A} {1 A}}
+    set t [db eval "SELECT * FROM $a ORDER BY a, b"]
+    list {a b} [lmap {a b} $t {list $a $b}]
 } -cleanup {
     $r destroy
-} -match glob -result {{a b} {{1 A} {2 a} {11 a} {11 A} {1 b} {2 b}}}
+    db close
+} -result {{a b} {{1 A} {1 b} {2 a} {2 b} {11 A} {11 a}}}
 
 
 ::tcltest::test result_order_by-1.1 {result_order_by:} -constraints {result_order_by} -setup {
+    sqlite3 db :memory:
 } -body {
-    set r [Result new {a b} {{2 a} {11 a} {1 b} {2 b} {11 A} {1 A}}]
-    $r order-by a {b -nocase}
-    list [$r getFieldNames] [$r getData]
+    set r [Result new db]
+    set a t1
+    $r makeTable $a {{a int} {b char}} {{2 a} {11 a} {1 b} {2 b} {11 A} {1 A}}
+    set t [db eval "SELECT * FROM $a ORDER BY a"]
+    list {a b} [lmap {a b} $t {list $a $b}]
 } -cleanup {
     $r destroy
-} -match glob -result {{a b} {{1 A} {11 a} {11 A} {2 a} {1 b} {2 b}}}
+    db close
+} -result {{a b} {{1 b} {1 A} {2 a} {2 b} {11 a} {11 A}}}
 
 
 ::tcltest::test result_order_by-1.2 {result_order_by:} -constraints {result_order_by} -setup {
+    sqlite3 db :memory:
 } -body {
-    set r [Result new {a b} {{2 a} {11 a} {1 b} {2 b} {11 A} {1 A}}]
-    $r order-by a b
-    list [$r getFieldNames] [$r getData]
+    set r [Result new db]
+    set a t1
+    $r makeTable $a {{a int} {b char}} {{2 a} {11 a} {1 b} {2 b} {11 A} {1 A}}
+    set t [db eval "SELECT * FROM $a ORDER BY b, a"]
+    list {a b} [lmap {a b} $t {list $a $b}]
 } -cleanup {
     $r destroy
-} -match glob -result {{a b} {{1 A} {11 A} {11 a} {2 a} {1 b} {2 b}}}
-
-
-::tcltest::test result_order_by-1.3 {result_order_by:} -constraints {result_order_by} -setup {
-} -body {
-    set r [Result new {a b} {{2 a} {11 a} {1 b} {2 b} {11 A} {1 A}}]
-    $r order-by {a -integer} b
-    list [$r getFieldNames] [$r getData]
-} -cleanup {
-    $r destroy
-} -match glob -result {{a b} {{1 A} {11 A} {2 a} {11 a} {1 b} {2 b}}}
+    db close
+} -result {{a b} {{1 A} {11 A} {2 a} {11 a} {1 b} {2 b}}}
 
 
 ::tcltest::test result_select-1.0 {result_select:} -constraints {result_select} -setup {
@@ -2109,30 +2035,38 @@ foreach file [glob -dir [file join $starkit::topdir _src] *.tcl] {
 } -match glob -result {{a b} {{1 2} {3 4}}}
 
 
-::tcltest::test result_read-1.0 {result_read:} -constraints {result_read} -setup {
-} -body {
     ::tcltest::makeFile "a;b;c;d\n1;2;3;4" a.csv
     ::tcltest::makeFile "5;6;7;8\n6;7;8;5" b.csv
-    set r [Result new]
-    set t [$r read [file join [::tcltest::configure -tmpdir] a.csv]]
-    list [$t getFieldNames] [$t getData]
+
+::tcltest::test result_read-1.0 {result_read:} -constraints {result_read} -setup {
+    sqlite3 db :memory:
+} -body {
+    set r [Result new db]
+    set a t1
+    $r makeTable $a {{a int} {b int} {c int} {d int}} [$r read1 [file join [::tcltest::configure -tmpdir] a.csv]]
+    set t [db eval "SELECT * FROM $a"]
+    list {a b c d} [lmap {a b c d} $t {list $a $b $c $d}]
 } -cleanup {
     $r destroy
-    $t destroy
-} -match glob -result {{a b c d} {{1 2 3 4}}}
+    db close
+} -result {{a b c d} {{1 2 3 4}}}
 
 
 ::tcltest::test result_read-1.1 {result_read:} -constraints {result_read} -setup {
+    sqlite3 db :memory:
 } -body {
-    ::tcltest::makeFile "a;b;c;d\n1;2;3;4" a.csv
-    ::tcltest::makeFile "5;6;7;8\n6;7;8;5" b.csv
-    set r [Result new]
-    set t [$r read [file join [::tcltest::configure -tmpdir] a.csv] [file join [::tcltest::configure -tmpdir] b.csv]]
-    list [$t getFieldNames] [$t getData]
+    set r [Result new db]
+    set a t1
+    $r makeTable $a {{a int} {b int} {c int} {d int}} [$r read1 [file join [::tcltest::configure -tmpdir] a.csv]]
+    set b t2
+    $r makeTable $b {{a int} {b int} {c int} {d int}} [$r read [file join [::tcltest::configure -tmpdir] b.csv]]
+    db eval "INSERT INTO $a SELECT * FROM $b"
+    set t [db eval "SELECT * FROM $a"]
+    list {a b c d} [lmap {a b c d} $t {list $a $b $c $d}]
 } -cleanup {
     $r destroy
-    $t destroy
-} -match glob -result {{a b c d} {{5 6 7 8} {6 7 8 5}}}
+    db close
+} -result {{a b c d} {{1 2 3 4} {5 6 7 8} {6 7 8 5}}}
 
 
 ::tcltest::test view_create-1.0 {view_create: nullary} -constraints {view_create} -setup {

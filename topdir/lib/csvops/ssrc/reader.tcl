@@ -3,6 +3,16 @@
 # read a csv file and maintain an internal matrix database
 #
 
+package require optionhandler
+
+if {[info commands ::DB] eq {}} {
+    source [file join [file dirname [info script]] result.tcl]
+}
+
+if {[info commands ::Table] eq {}} {
+    source [file join [file dirname [info script]] result.tcl]
+}
+
 if {[info commands ::FieldAccess] eq {}} {
     source [file join [file dirname [info script]] fieldaccess.tcl]
 }
@@ -21,9 +31,10 @@ if {[info commands ::MatrixDB] eq {}} {
 
 oo::class create Reader {
     variable db options
-    mixin FieldAccess Processor Validator
+    mixin DB FieldAccess Processor Validator
 
     constructor args {
+        if no {
         # local options defaults (note expand = auto)
         array set options {
             -alternate 0
@@ -33,53 +44,35 @@ oo::class create Reader {
             -expand auto
             -fields {}
         }
+        }
 
         # modify by global defaults (which override)
         if {[info exists ::options]} {
             array set options [array get ::options]
         }
 
-        while {[llength $args]} {
-            switch [::tcl::prefix match -error {} {-rows -cols -separator -expand -fields -alternate --} [lindex $args 0]] {
-                -rows       {set args [lassign $args - options(-rows)]}
-                -cols       {set args [lassign $args - options(-cols)]}
-                -separator  {set args [lassign $args - options(-separator)]}
-                -expand     {
-                    set args [lassign $args - options(-expand)]
-                    switch [::tcl::prefix match -error {} {auto empty none} $options(-expand)] {
-                        auto  {set options(-expand) auto}
-                        empty {set options(-expand) empty}
-                        none  {set options(-expand) none}
-                        default {
-                            return -code error [mc {illegal expand mode %s} $options(-expand)]
-                        }
-                    }
-                }
-                -fields     {set args [lassign $args - options(-fields)]}
-                -alternate  {set options(-alternate) 1 ; set args [lrange $args 1 end]}
-                --          {set args [lrange $args 1 end] ; break}
-                default     {
-                    if {[string match -* [lindex $args 0]]} {
-                        error [mc {unknown option %s} [lindex $args 0]]
-                    } else {
-                        break
-                    }
-                }
-            }
-        }
+        set o [OptionHandler new]
+        $o option -alternate default 0 flag 1
+        $o option -rows default :
+        $o option -cols default {}
+        $o option -separator default \;
+        $o option -oseparator
+        $o option -expand default auto
+        $o option -fields default {}
+        $o extract [my varname options] {*}$args
+        set options(-expand) [my -expand-process $options(-expand)]
+        $o destroy
 
-        set db [MatrixDB new]
-
+        if no {
         oo::objdefine [self] forward rows $db rows
         oo::objdefine [self] forward import $db import
         oo::objdefine [self] forward expose $db expose
+        }
 
         log addMessage {%s created} "Reader [self]"
     }
 
     destructor {
-        $db destroy
-
         log addMessage {%s destroyed} "Reader [self]"
     }
 
@@ -89,6 +82,16 @@ oo::class create Reader {
 
     method fields fields {
         set options(-fields) $fields
+    }
+
+    if no {
+    method fill args {
+        # load a matrix database from a csv file
+        catch {$m delete}
+        set m [::struct::matrix]
+        ::csv::select2matrix {*}$args $m
+        set currentrow 0
+        return
     }
 
     method read filename {
@@ -104,6 +107,15 @@ oo::class create Reader {
             log addMessage {%s %s rows, %s bytes read} "Reader [self]" [my rows] [file size $filename]
         } finally {
             catch {chan close $chan}
+        }
+    }
+    }
+
+    method -expand-process val {
+        try {
+            ::tcl::prefix match {auto empty none} $val
+        } on error {} {
+            return -code error [mc {illegal expand mode %s} $val]
         }
     }
 

@@ -66,13 +66,25 @@ oo::objdefine csvops {
     method RunSafe args {
         ::csvops::log init
         lappend ::auto_path .
+        # TODO kludgy add: topdir/lib
+        ::tcl::tm::path add [file join [file dirname [info script]] ..]
         set int [::safe::interpCreate]
         Script_PolicyInit $int
 
+        if no {
         foreach arg [lrange $args 0 end-1] {
             $int eval $arg
         }
         $int eval [list try [lindex $args end] on error msg {error [mc {Failure %s} $msg]}]
+        } else {
+        set i2 $int
+        set int {}
+        foreach arg [lrange $args 0 end-1] {
+            interp eval $int $arg
+        }
+        interp eval $int [list try [lindex $args end] on error msg {error [mc {Failure %s} $msg]}]
+        set int $i2
+        }
 
         ::safe::interpDelete $int
         if {[::csvops::log done]} exit
