@@ -12,7 +12,7 @@ apply {args {
     foreach arg $args {
         source -encoding utf-8 [file join $dir $arg]
     }
-}} logging.tcl policy.tcl safe.tcl
+}} policy.tcl safe.tcl
 
 #interp alias {} mc {} format
 
@@ -46,10 +46,10 @@ oo::objdefine csvops {
         lappend init {package require fileutil}
         lappend init [list array set ::options [array get ::options]]
 
-        if {$starkit::mode eq "unwrapped"} {
+        if {[info exists starkit] && $starkit::mode eq "unwrapped"} {
             my RunDebug {*}$init {vwait forever}
-        } elseif {  0  &&  $filename eq ""} {
-            ; # TODO testing
+        } elseif {$filename eq {}} {
+            ; # just loading
         } else {
             try {
                 cd [file dirname $filename]
@@ -67,26 +67,27 @@ oo::objdefine csvops {
         ::csvops::log init
         lappend ::auto_path .
         # TODO kludgy add: topdir/lib
+        if no {
         ::tcl::tm::path add [file join [file dirname [info script]] ..]
-        set int [::safe::interpCreate]
-        Script_PolicyInit $int
+        }
 
         if no {
+        set int [::safe::interpCreate]
+        Script_PolicyInit $int
         foreach arg [lrange $args 0 end-1] {
             $int eval $arg
         }
         $int eval [list try [lindex $args end] on error msg {error [mc {Failure %s} $msg]}]
+        ::safe::interpDelete $int
         } else {
-        set i2 $int
         set int {}
+        Script_PolicyInit $int
         foreach arg [lrange $args 0 end-1] {
             interp eval $int $arg
         }
         interp eval $int [list try [lindex $args end] on error msg {error [mc {Failure %s} $msg]}]
-        set int $i2
         }
 
-        ::safe::interpDelete $int
         if {[::csvops::log done]} exit
     }
 
@@ -110,3 +111,6 @@ oo::objdefine csvops {
     }
 
 }
+
+csvops reset
+

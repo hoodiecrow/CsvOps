@@ -1,3 +1,8 @@
+
+
+return
+
+
 package require struct::matrix
 
 oo::class create Writer {

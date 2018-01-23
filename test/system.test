@@ -12,22 +12,22 @@ file copy -force [file join [::tcltest::configure -testdir] eval.csv] [::tcltest
 file copy -force [file join [::tcltest::configure -testdir] eval2.csv] [::tcltest::configure -tmpdir]
 
 set STARKITS H:/starkits
-set SANDBOX H:/_a
+set SANDBOX H:/code
 if {![file exists $STARKITS]} {
     set STARKITS [file normalize [file join ~ starkits]]
-    set SANDBOX [file normalize [file join data sandbox]]
+    set SANDBOX [file normalize [file join ~ code]]
 }
 set EXEC [list exec tclsh [file join $STARKITS csvops.kit]]
 set FOO_CO [file join [::tcltest::configure -tmpdir] foo.co]
 
-::tcltest::test system-1.0 {} -constraints {system} -setup {
+::tcltest::test system-1.0 {} -constraints {skip system} -setup {
 } -body {
     {*}$EXEC
 } -cleanup {
 } -match glob -result {Cannot read file "", does not exist*} -returnCodes error
 
 
-::tcltest::test system-1.1 {} -constraints system -setup {
+::tcltest::test system-1.1 {} -constraints {skip system} -setup {
 } -body {
     {*}$EXEC foo:bar
 } -cleanup {
@@ -42,7 +42,7 @@ set FOO_CO [file join [::tcltest::configure -tmpdir] foo.co]
 } -result {I'm foo}
 
 
-::tcltest::test system-2.0 {options: defaults} -constraints system -setup {
+::tcltest::test system-2.0 {options: defaults} -constraints {skip system} -setup {
     ::tcltest::makeFile {
         ::fileutil::writeFile foo.out [lmap opt [lsort [array names ::options]] {
             list $opt $options($opt)
@@ -56,7 +56,7 @@ set FOO_CO [file join [::tcltest::configure -tmpdir] foo.co]
 } -result {{-alternate 0} {-cols {}} {-expand auto} {-fields {}} {-rows :} {-separator {;}}}
 
 
-::tcltest::test system-2.1 {options: all} -constraints system -setup {
+::tcltest::test system-2.1 {options: all} -constraints {skip system} -setup {
     ::tcltest::makeFile {
         ::fileutil::writeFile foo.out [lmap opt [lsort [array names ::options]] {
             list $opt $options($opt)
@@ -70,7 +70,7 @@ set FOO_CO [file join [::tcltest::configure -tmpdir] foo.co]
 } -result {{-alternate 1} {-cols ab} {-expand empty} {-fields cd} {-rows ef} {-separator gh}}
 
 
-::tcltest::test system-2.2 {options: abbreviated} -constraints system -setup {
+::tcltest::test system-2.2 {options: abbreviated} -constraints {skip system} -setup {
     ::tcltest::makeFile {
         ::fileutil::writeFile foo.out [lmap opt [lsort [array names ::options]] {
             list $opt $options($opt)

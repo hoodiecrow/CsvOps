@@ -1,12 +1,10 @@
+
+if {[info commands ::Table] ne {}} {
+    return
+}
+
 package require struct::matrix
 package require struct::set
-
-
-
-return
-
-
-
 
 oo::class create Table {
     variable m f

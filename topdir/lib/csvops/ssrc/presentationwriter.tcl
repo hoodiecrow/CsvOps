@@ -20,6 +20,9 @@ oo::class create PresentationWriter {
                 default break
             }
         }
+        if {[llength [info commands ::csvops::log]] < 1} {
+            proc log args {}
+        }
         log addMessage {%s created} "PresentationWriter [self]"
     }
 

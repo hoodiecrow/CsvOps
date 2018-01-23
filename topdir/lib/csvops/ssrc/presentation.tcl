@@ -6,6 +6,9 @@ oo::class create Presentation {
 
     constructor args {
         my addHeader {*}$args
+        if {[llength [info commands ::csvops::log]] < 1} {
+            proc log args {}
+        }
         log addMessage {%s created} "Presentation [self]"
     }
 

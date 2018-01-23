@@ -4,16 +4,19 @@
 #
 
 proc Script_PolicyInit slave {
-    # to support a test case
-    interp share {} stdout $slave
-    # ::control needs this
-    interp expose $slave pwd
+    # I might want to use the standard interpreter when testing, so slave might be {}.
+    if {$slave ne {}} {
+        # to support a test case
+        interp share {} stdout $slave
+        # ::control needs this
+        interp expose $slave pwd
 
-    interp alias $slave ::open {} ::safe::AliasOpen $slave
+        interp alias $slave ::open {} ::safe::AliasOpen $slave
 
-    # ::fileutil needs these, safe::loadTk needs normalize
-    foreach subcommand {exists isfile writable readable size mkdir normalize} {
-        interp alias $slave ::tcl::file::$subcommand {} ::safe::AliasFileSubcommand2 $slave $subcommand
+        # ::fileutil needs these, safe::loadTk needs normalize
+        foreach subcommand {exists isfile writable readable size mkdir normalize} {
+            interp alias $slave ::tcl::file::$subcommand {} ::safe::AliasFileSubcommand2 $slave $subcommand
+        }
     }
 
     interp alias $slave ::log {} ::csvops::log

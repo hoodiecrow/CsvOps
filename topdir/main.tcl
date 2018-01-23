@@ -11,8 +11,6 @@ conf msgcat [namespace current]
 conf resource csvops
 }
 
-csvops reset
-
 package require tkcon
 
 tkcon show

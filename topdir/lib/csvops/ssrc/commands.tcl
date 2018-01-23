@@ -55,16 +55,3 @@ proc stringNormalize {varName {ops trim}} {
         set var [string $op $var]
     }
 }
-
-proc commaToDot varName {
-    # change all commas in a cell value to dots
-    upvar 1 $varName var
-    set var [string map {, .} $var]
-}
-
-proc dotToComma varName {
-    # change all dots in a cell value to commas
-    upvar 1 $varName var
-    set var [string map {. ,} $var]
-}
-

@@ -109,14 +109,14 @@ proc round {val sigdig decimals {decimalChar ,}} {
     string map [list . $decimalChar] [format %.${decimals}f [format %.${sigdig}g $val]]
 }
 
-proc serialCompareEqual {c0 c1} {
+proc _serialCompareEqual {c0 c1} {
     # collects a list of booleans that describe the equality of non-decimal values in two columns
     lmap e0 $c0 e1 $c1 {
         expr {$e0 == $e1}
     }
 }
 
-proc serialCompareEqualDecimal {c0 c1} {
+proc _serialCompareEqualDecimal {c0 c1} {
     # collects a list of booleans that describe decimal equality between two columns
     lmap e0 $c0 e1 $c1 {
         commaToDot e0
@@ -125,7 +125,7 @@ proc serialCompareEqualDecimal {c0 c1} {
     }
 }
 
-proc serialCompareEmpty {c0 c1} {
+proc _serialCompareEmpty {c0 c1} {
     # collects a list of values 0-3 that compare emptiness between two columns;
     # 0 if neither cell is empty, 1 if e1 is empty, 2 if e0 is empty, 3 if both
     # are empty
