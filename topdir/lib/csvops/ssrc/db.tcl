@@ -21,6 +21,40 @@ oo::class create DB {
         [self namespace]::dbcmd close
     }
 
+    method select {tableid args} {
+        if {[llength $args] < 1} {
+            set columns *
+        } else {
+            set columns [join $args ,]
+        }
+        dbcmd eval [format {SELECT %s FROM %s} $columns $tableid]
+    }
+
+    method insert {tableid args} {
+        if {[llength $args] eq 1} {
+            set columns {}
+            set values ([join [my ImportValues [lindex $args 0]] ,])
+        } elseif {[llength $args] eq 2} {
+            set columns ([join [lindex $args 0] ,])
+            set values ([join [my ImportValues [lindex $args 1]] ,])
+        } else {
+            return -code error [mc {wrong number of arguments, should be "insert tableid ?columns? values"}]
+        }
+        dbcmd eval [format {INSERT INTO %s %s VALUES %s} $tableid $columns $values]
+    }
+
+    method exists args {
+        # TODO
+    }
+    
+    method create {tableid args} {
+        # TODO add test
+        if {[llength $args] > 0} {
+            set columns [join $args ,]
+            dbcmd eval [format {CREATE TABLE %s (%s)} $tableid $columns]
+        }
+    }
+
     method eval2 args {
         if {[llength $args] eq 2} {
             lassign $args varName sql
@@ -135,7 +169,7 @@ oo::class create DB {
             } elseif {[string is double -strict $flval]} {
                 set flval
             } else {
-                format '%s' $value
+                format '%s' [string map {' ''} $value]
             }
         }
     }

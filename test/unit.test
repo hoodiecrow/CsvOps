@@ -11,23 +11,21 @@ foreach unit {
 
     write_table
 
-    presentation_get presentation_getRow
-    presentation_getColumn presentation_rows presentation_columns
-    presentation_lookupColumn
+    presentation_rows presentation_columns presentation_lookupColumn
 
     utils_anon utils_cols utils_getFirstLine utils_dbjoin utils_getdiag
     utils_dayDistance utils_round utils_serialCompareEqual
     utils_serialCompareEqualDecimal utils_serialCompareEmpty utils_yearDistance
     utils_getdiag_a
     
-    result_union result_intersect result_except result_union_all
-    result_distinct result_range result_order_by result_select result_create
+    result_intersect result_except result_range result_order_by result_select
     
 } {
     ::tcltest::testConstraint $unit 1
 }
 
 if no {
+    # superc by sql: presentation_get presentation_getRow presentation_getColumn
     presentation_toDOM presentation_asLoL presentation_toMatrix
     presentation_addHeader presentation_addRow presentation_set presentation_incr presentation_tally presentationwriter_write
 
@@ -58,77 +56,129 @@ namespace import ::msgcat::mc
 
 # NOTE viewFile suppresses ending newline
 
-::tcltest::test utils_dbjoin-1.0 {inner join} -constraints utils_dbjoin -setup {
-    ::tcltest::makeFile "0;foo\n1;snarf\n2;blue" a.csv
-    ::tcltest::makeFile "0;bagel\n1;snatz\n3;driver" b.csv
-    set r [DB new]
-    $r makeTable t1 {{foo int} bar} [$r read [file join [::tcltest::configure -tmpdir] a.csv]]
-    $r makeTable t2 {{foo int} bar} [$r read [file join [::tcltest::configure -tmpdir] b.csv]]
+# Features (mostly) replaced by sql application
+::tcltest::test all-the-sql-1.0 {} -setup {
+    set db [DB new]
+    set res {}
 } -body {
-    $r eval2 res {SELECT t1.foo AS a, t1.bar AS b, t2.foo AS c, t2.bar AS d FROM t1 INNER JOIN t2 ON t1.foo = t2.foo}
-    dict values [lrange $res 2 end]
+    set res {}
 } -cleanup {
-    $r destroy
-} -result {{0 foo 0 bagel} {1 snarf 1 snatz}}
+    $db destroy
+} -result {}
 
-
-::tcltest::test utils_dbjoin-1.1 {left outer join} -constraints utils_dbjoin -setup {
-    ::tcltest::makeFile "0;foo\n1;snarf\n2;blue" a.csv
-    ::tcltest::makeFile "0;bagel\n1;snatz\n3;driver" b.csv
-    set r [DB new]
-    $r makeTable t1 {{foo int} bar} [$r read [file join [::tcltest::configure -tmpdir] a.csv]]
-    $r makeTable t2 {{foo int} bar} [$r read [file join [::tcltest::configure -tmpdir] b.csv]]
+# Interface to sql
+::tcltest::test sql-methods-1.0 {} -setup {
+    ::tcltest::makeFile "foo;bar;baz\n0;foo;ab\n1;snarf;cd\n2;blue;ef" a.csv
+    set db [DB new]
+    $db readTable t1 [file join [::tcltest::configure -tmpdir] a.csv]
+    set res {}
 } -body {
-    set w {}
-    $r eval {SELECT t1.foo AS a, t1.bar AS b, t2.foo AS c, t2.bar AS d FROM t1 LEFT JOIN t2 ON t1.foo = t2.foo} {
-        lappend w "$a;$b;$c;$d"
-    }
-    join $w \n
+    # SELECT * FROM t1;
+    lappend res [$db select t1]
+    # SELECT foo, bar FROM t1;
+    lappend res [$db select t1 foo bar]
+    set res
 } -cleanup {
-    $r destroy
-} -result {0;foo;0;bagel
-1;snarf;1;snatz
-2;blue;;}
+    $db destroy
+} -result {{0 foo ab 1 snarf cd 2 blue ef} {0 foo 1 snarf 2 blue}}
 
+# db borrowed from https://www.w3schools.com/sql
+::tcltest::makeFile [join [list \
+{CustomerID;CustomerName;ContactName;Address;City;PostalCode;Country} \
+{1;Alfreds Futterkiste;Maria Anders;Obere Str. 57;Berlin;12209;Germany} \
+{2;Ana Trujillo Emparedados y helados;Ana Trujillo;Avda. de la Constitución 2222;México D.F.;05021;Mexico} \
+{3;Antonio Moreno Taquería;Antonio Moreno;Mataderos 2312;México D.F.;05023;Mexico} \
+{4;Around the Horn;Thomas Hardy;120 Hanover Sq.;London;WA1 1DP;UK} \
+{5;Berglunds snabbköp;Christina Berglund;Berguvsvägen 8;Luleå;S-958 22;Sweden}] \n] a.csv
+::tcltest::makeFile [join [list \
+{CustomerID;CustomerName;ContactName;Address;City;PostalCode;Country} \
+{89;White Clover Markets;Karl Jablonski;305 - 14th Ave. S. Suite 3B;Seattle;98128;USA} \
+{90;Wilman Kala;Matti Karttunen;Keskuskatu 45;Helsinki;21240;Finland} \
+{91;Wolski;Zbyszek;ul. Filtrowa 68;Walla;01-012;Poland}] \n] b.csv
+::tcltest::makeFile [join [list \
+{OrderID;CustomerID;OrderDate} \
+{10308;2;1996-09-18} \
+{10309;4;1996-09-19} \
+{10310;77;1996-09-20}] \n] c.csv
+::tcltest::makeFile [join [list \
+{SupplierID;SupplierName;ContactName;Address;City;PostalCode;Country} \
+{1;Exotic Liquid;Charlotte Cooper;49 Gilbert St.;London;EC1 4SD;UK} \
+{2;New Orleans Cajun Delights;Shelley Burke;P.O. Box 78934;New Orleans;70117;USA} \
+{3;Grandma Kelly's Homestead;Regina Murphy;707 Oxford Rd.;Ann Arbor;48104;USA}] \n] d.csv
 
-::tcltest::test utils_dbjoin-1.3 {right outer join} -constraints {UNSUPPORTED utils_dbjoin} -setup {
-    ::tcltest::makeFile "0;foo\n1;snarf\n2;blue" a.csv
-    ::tcltest::makeFile "0;bagel\n1;snatz\n3;driver" b.csv
-    set r [DB new]
-    $r makeTable t1 {foo bar} [$r read [file join [::tcltest::configure -tmpdir] a.csv]]
-    $r makeTable t2 {foo bar} [$r read [file join [::tcltest::configure -tmpdir] b.csv]]
+::tcltest::test sql-methods-1.1 {} -setup {
+    set res {}
 } -body {
-    set w {}
-    $r eval {SELECT t1.foo AS a, t1.bar AS b, t2.foo AS c, t2.bar AS d FROM t1 RIGHT JOIN t2 ON t1.foo = t2.foo} {
-        lappend w "$a;$b;$c;$d"
-    }
-    join $w \n
+    set db [DB new]
+    $db readTable Customers [file join [::tcltest::configure -tmpdir] a.csv]
+    # SELECT Country FROM Customers
+    lappend res [$db select Customers Country]
+    lappend res [$db eval {SELECT DISTINCT Country FROM Customers}]
+    lappend res [$db eval {SELECT COUNT(DISTINCT Country) FROM Customers}]
+    lappend res [$db eval {SELECT CustomerID FROM Customers WHERE Country='Mexico'}]
+    lappend res [$db eval {SELECT CustomerID FROM Customers WHERE CustomerID=1}]
+    lappend res [$db eval {SELECT CustomerID FROM Customers WHERE Country='Germany' AND City='Berlin'}]
+    lappend res [$db eval {SELECT CustomerID FROM Customers WHERE City='Berlin' OR City='München'}]
+    lappend res [$db eval {SELECT CustomerID FROM Customers WHERE NOT Country='Germany'}]
+    lappend res [$db eval {SELECT CustomerID FROM Customers ORDER BY Country}]
+    lappend res [$db eval {SELECT CustomerID FROM Customers ORDER BY Country DESC}]
+    $db destroy
+    set db [DB new]
+    $db readTable Customers [file join [::tcltest::configure -tmpdir] b.csv]
+    # INSERT INTO Customers (CustomerName, ContactName, Address, City, PostalCode, Country)
+    # VALUES ('Cardinal', 'Tom B. Erichsen', 'Skagen 21', 'Stavanger', '4006', 'Norway');
+    set columns {CustomerName ContactName Address City PostalCode Country}
+    set values  [split {Cardinal,Tom B. Erichsen,Skagen 21,Stavanger,4006,Norway} ,]
+    $db insert Customers $columns $values
+    lappend res [$db select Customers Country]
+    set res
 } -cleanup {
-    $r destroy
-} -result {0;foo;0;bagel
-1;snarf;1;snatz
-;;3;driver}
+    catch {$db destroy}
+} -result {{Germany Mexico Mexico UK Sweden} {Germany Mexico UK Sweden} 4 {2 3} 1 1 1 {2 3 4 5} {1 2 3 5 4} {4 5 2 3 1} {USA Finland Poland Norway}}
 
-
-::tcltest::test utils_dbjoin-1.4 {full outer join} -constraints {UNSUPPORTED utils_dbjoin} -setup {
-    ::tcltest::makeFile "0;foo\n1;snarf\n2;blue" a.csv
-    ::tcltest::makeFile "0;bagel\n1;snatz\n3;driver" b.csv
-    set r [DB new]
-    $r makeTable t1 {foo bar} [$r read [file join [::tcltest::configure -tmpdir] a.csv]]
-    $r makeTable t2 {foo bar} [$r read [file join [::tcltest::configure -tmpdir] b.csv]]
+::tcltest::test sql-methods-1.2 {} -setup {
+    set res {}
 } -body {
-    set w {}
-    $r eval {SELECT t1.foo AS a, t1.bar AS b, t2.foo AS c, t2.bar AS d FROM t1 FULL JOIN t2 ON t1.foo = t2.foo} {
-        lappend w "$a;$b;$c;$d"
-    }
-    join $w \n
+    set db [DB new]
+    $db readTable Customers [file join [::tcltest::configure -tmpdir] a.csv]
+    $db readTable Orders [file join [::tcltest::configure -tmpdir] c.csv]
+    lappend res [$db eval2 {
+        SELECT Orders.OrderID, Customers.CustomerName, Orders.OrderDate
+        FROM Orders
+        INNER JOIN Customers ON Orders.CustomerID=Customers.CustomerID
+    }]
+    lappend res [$db eval2 {
+        SELECT Orders.OrderID, Customers.CustomerName, Orders.OrderDate
+        FROM Orders
+        LEFT JOIN Customers ON Orders.CustomerID=Customers.CustomerID
+    }]
+    set res
 } -cleanup {
-    $r destroy
-} -result {0;foo;0;bagel
-1;snarf;1;snatz
-2;blue;;
-;;3;driver}
+    catch {$db destroy}
+} -result {{* {OrderID CustomerName OrderDate} 0 {10308 {Ana Trujillo Emparedados y helados} 1996-09-18} 1 {10309 {Around the Horn} 1996-09-19}} {* {OrderID CustomerName OrderDate} 0 {10308 {Ana Trujillo Emparedados y helados} 1996-09-18} 1 {10309 {Around the Horn} 1996-09-19} 2 {10310 {} 1996-09-20}}}
 
+::tcltest::test sql-methods-1.3 {} -setup {
+    set res {}
+} -body {
+    set db [DB new]
+    $db readTable Customers [file join [::tcltest::configure -tmpdir] a.csv]
+    $db readTable Suppliers [file join [::tcltest::configure -tmpdir] d.csv]
+    lappend res [$db eval {
+        SELECT City FROM Customers
+        UNION
+        SELECT City FROM Suppliers
+        ORDER BY City;
+    }]
+    lappend res [$db eval {
+        SELECT City FROM Customers
+        UNION ALL
+        SELECT City FROM Suppliers
+        ORDER BY City;
+    }]
+    set res
+} -cleanup {
+    catch {$db destroy}
+} -result {{{Ann Arbor} Berlin London Luleå {México D.F.} {New Orleans}} {{Ann Arbor} Berlin London London Luleå {México D.F.} {México D.F.} {New Orleans}}}
 
 ::tcltest::test commands_constrain-1.0 {constrain:} -constraints {commands_constrain} -setup {
 } -body {
@@ -477,12 +527,16 @@ namespace import ::msgcat::mc
     set d [DB new]
     $d makeTable t1 {id a b c} {{a 45 89 23}}
 } -body {
+    if no {
     # decl: get {row col}
     set t [Presentation new Foobar [$d eval2 {SELECT * FROM t1}]]
     $t get a b
+    } else {
+    $d eval {SELECT b FROM t1 WHERE id='a'}
+    }
 } -cleanup {
     $d destroy
-    $t destroy
+    catch {$t destroy}
 } -result 89
 
 
@@ -548,12 +602,16 @@ namespace import ::msgcat::mc
     set d [DB new]
     $d makeTable t1 {id a b c} {{a 45 89 23} {b 89 37 82}}
 } -body {
+    if no {
     # decl: getRow row
     set t [Presentation new Foobar [$d eval2 {SELECT * FROM t1}]]
     $t getRow a
+    } else {
+    $d eval {SELECT * FROM t1 WHERE id='a'}
+    }
 } -cleanup {
     $d destroy
-    $t destroy
+    catch {$t destroy}
 } -result {a 45 89 23}
 
 
@@ -561,12 +619,16 @@ namespace import ::msgcat::mc
     set d [DB new]
     $d makeTable t1 {id a b c} {{a 45 89 23} {b 89 37 82}}
 } -body {
+    if no {
     # decl: getColumn col
     set t [Presentation new Foobar [$d eval2 {SELECT * FROM t1}]]
     $t getColumn b
+    } else {
+    $d eval {SELECT b FROM t1}
+    }
 } -cleanup {
     $d destroy
-    $t destroy
+    catch {$t destroy}
 } -result {89 37}
 
 
@@ -574,12 +636,16 @@ namespace import ::msgcat::mc
     set d [DB new]
     $d makeTable t1 {id a b c} {{a 45 89 23} {b 89 37 82}}
 } -body {
+    if no {
     # decl: rows {}
     set t [Presentation new Foobar [$d eval2 {SELECT * FROM t1}]]
     $t rows
+    } else {
+    $d eval {SELECT COUNT(*) FROM t1}
+    }
 } -cleanup {
     $d destroy
-    $t destroy
+    catch {$t destroy}
 } -result 2
 
 
@@ -587,12 +653,19 @@ namespace import ::msgcat::mc
     set d [DB new]
     $d makeTable t1 {id a b c} {{a 45 89 23} {b 89 37 82}}
 } -body {
+    if no {
     # decl: columns {}
     set t [Presentation new Foobar [$d eval2 {SELECT * FROM t1}]]
     $t columns
+    } elseif no {
+    # ... added in SQLite version 3.16.0 (2017-01-02). Prior versions of SQLite cannot use this feature.
+    $d eval {select count(*) from pragma table_info('t1')}
+    } else {
+    llength [dict get [$d eval2 {select * from t1}] *]
+    }
 } -cleanup {
     $d destroy
-    $t destroy
+    catch {$t destroy}
 } -result 4
 
 
@@ -732,11 +805,15 @@ namespace import ::msgcat::mc
     set d [DB new]
     $d makeTable t1 {a b c} {{1 2 3}}
 } -body {
+    if no {
     set t [Presentation new Foobar [$d eval2 {SELECT * FROM t1}]]
     $t lookupColumn b
+    } else {
+    $d eval {SELECT b FROM t1}
+    }
 } -cleanup {
     $d destroy
-    $t destroy
+    catch {$t destroy}
 } -result 2
 
 
@@ -1217,17 +1294,6 @@ foreach file [glob -dir [file join $starkit::topdir _src] *.tcl] {
 }
 
 
-::tcltest::test result_union-1.0 {result_union:} -constraints {result_union} -setup {
-    set r [DB new]
-    $r makeTable t1 {a b c} {{1 2 3} {2 3 1} {3 1 2} {3 1 2}}
-    $r makeTable t2 {a b c} {{4 5 6} {5 6 4} {4 5 6}}
-} -body {
-    dict values [$r eval2 {SELECT * FROM t1 UNION SELECT * FROM t2}]
-} -cleanup {
-    $r destroy
-} -result {{a b c} {1 2 3} {2 3 1} {3 1 2} {4 5 6} {5 6 4}}
-
-
 ::tcltest::test result_intersect-1.0 {result_intersect:} -constraints {result_intersect} -setup {
     set r [DB new]
     $r makeTable t1 {a b c} {{1 2 3} {2 3 1} {3 1 2} {3 1 2}}
@@ -1270,52 +1336,6 @@ foreach file [glob -dir [file join $starkit::topdir _src] *.tcl] {
 } -cleanup {
     $r destroy
 } -result {{a b c} {1 2 3} {3 1 2}}
-
-
-::tcltest::test result_union_all-1.0 {result_union_all:} -constraints {result_union_all} -setup {
-} -body {
-    set r [DB new]
-    $r makeTable t1 {a b c} {{1 2 3} {2 3 1} {3 1 2} {3 1 2}}
-    $r makeTable t2 {a b c} {{4 5 6} {5 6 4} {4 5 6}}
-    set t [$r eval {SELECT * FROM t1 UNION ALL SELECT * FROM t2}]
-    list {a b c} [lmap {a b c} $t {list $a $b $c}]
-} -cleanup {
-    $r destroy
-} -result {{a b c} {{1 2 3} {2 3 1} {3 1 2} {3 1 2} {4 5 6} {5 6 4} {4 5 6}}}
-
-
-::tcltest::test result_union_all-1.1 {result_union_all:} -constraints {result_union_all} -setup {
-} -body {
-    set r [DB new]
-    $r makeTable t1 {a b c} {{1 2 3} {2 3 1} {3 1 2} {3 1 2}}
-    $r makeTable t2 {a b c} {}
-    set t [$r eval "SELECT * FROM t1 UNION ALL SELECT * FROM t2"]
-    list {a b c} [lmap {a b c} $t {list $a $b $c}]
-} -cleanup {
-    $r destroy
-} -result {{a b c} {{1 2 3} {2 3 1} {3 1 2} {3 1 2}}}
-
-
-::tcltest::test result_union_all-1.2 {result_union_all:} -constraints {result_union_all} -setup {
-} -body {
-    set r [DB new]
-    $r makeTable t1 {a b c} {}
-    $r makeTable t2 {a b c} {{4 5 6} {5 6 4} {4 5 6}}
-    set t [$r eval "SELECT * FROM t1 UNION ALL SELECT * FROM t2"]
-    list {a b c} [lmap {a b c} $t {list $a $b $c}]
-} -cleanup {
-    $r destroy
-} -result {{a b c} {{4 5 6} {5 6 4} {4 5 6}}}
-
-
-::tcltest::test result_distinct-1.0 {result_distinct:} -constraints {result_distinct} -setup {
-    set r [DB new]
-    $r makeTable t1 {a b c} {{1 2 3} {2 3 1} {3 1 2} {3 1 2} {1 3 2}}
-} -body {
-    dict values [$r eval2 {SELECT DISTINCT * FROM t1}]
-} -cleanup {
-    $r destroy
-} -result {{a b c} {1 2 3} {2 3 1} {3 1 2} {1 3 2}}
 
 
 ::tcltest::test result_range-1.0 {result_range:} -constraints {result_range} -setup {
@@ -1421,27 +1441,6 @@ foreach file [glob -dir [file join $starkit::topdir _src] *.tcl] {
 
     ::tcltest::makeFile "a;b;c;d\n1;2;3;4" a.csv
     ::tcltest::makeFile "5;6;7;8\n6;7;8;5" b.csv
-
-::tcltest::test result_create-1.1 {result_create:} -constraints {result_create} -setup {
-    set r [DB new]
-    $r readTable t1 [file join [::tcltest::configure -tmpdir] a.csv]
-} -body {
-    dict values [$r eval2 {SELECT * FROM t1}]
-} -cleanup {
-    $r destroy
-} -result {{a b c d} {1 2 3 4}}
-
-
-::tcltest::test result_create-1.2 {result_create:} -constraints {result_create} -setup {
-    set r [DB new]
-    $r readTable t1 [file join [::tcltest::configure -tmpdir] a.csv]
-    $r makeTable t2 {a b c d} [$r read [file join [::tcltest::configure -tmpdir] b.csv]]
-} -body {
-    dict values [$r eval2 {INSERT INTO t1 SELECT * FROM t2 ; SELECT * FROM t1}]
-} -cleanup {
-    $r destroy
-} -result {{a b c d} {1 2 3 4} {5 6 7 8} {6 7 8 5}}
-
 
 ::tcltest::test write_table-1.0 {write_table} -constraints write_table -setup {
     ::tcltest::makeFile "0;foo\n1;snarf\n2;blue" a.csv
