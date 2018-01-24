@@ -1,12 +1,9 @@
-package require csv
 
 if {[info commands ::DB] ne {}} {
     return
 }
 
-if {[info commands ::Table] ne {}} {
-    return
-}
+package require csv
 
 oo::class create DB {
     variable options
@@ -19,6 +16,91 @@ oo::class create DB {
 
     destructor {
         [self namespace]::dbcmd close
+    }
+
+    method select {tableid args} {
+        if {[llength $args] < 1} {
+            set columns *
+        } else {
+            set columns [join $args ,]
+        }
+        dbcmd eval [format {SELECT %s FROM %s} $columns $tableid]
+    }
+
+    method insert {tableid args} {
+        if {[llength $args] eq 1} {
+            set columns {}
+            set values ([join [my ImportValues [lindex $args 0]] ,])
+        } elseif {[llength $args] eq 2} {
+            set columns ([join [lindex $args 0] ,])
+            set values ([join [my ImportValues [lindex $args 1]] ,])
+        } else {
+            return -code error [mc {wrong number of arguments, should be "insert tableid ?columns? values"}]
+        }
+        dbcmd eval [format {INSERT INTO %s %s VALUES %s} $tableid $columns $values]
+    }
+
+    method exists args {
+        # TODO
+    }
+    
+    method create {tableid args} {
+        # TODO add test
+        if {[llength $args] > 0} {
+            set columns [join $args ,]
+            dbcmd eval [format {CREATE TABLE %s (%s)} $tableid $columns]
+        }
+    }
+
+    method toDOM doc {
+        # TODO transplanted from presentation, needs rewrite
+        set tnode [$doc createElement table]
+
+        dom createNodeCmd elementNode caption
+        dom createNodeCmd elementNode tr
+        dom createNodeCmd elementNode th
+        dom createNodeCmd elementNode td
+        dom createNodeCmd textNode t
+
+        $tnode appendFromScript {caption {t [my getLabel]}}
+        for {set i 0} {$i < [$m rows]} {incr i} {
+            set vals [lassign [$m get row $i] rowkey]
+            if {$i == 0} {
+                set rowkey {}
+                set nc th
+            } else {
+                set nc td
+            }
+            $tnode appendFromScript {
+                tr {
+                    th {t $rowkey}
+                    foreach val $vals {
+                        $nc {t $val}
+                    }
+                }
+            }
+        }
+
+        return $tnode
+    }
+
+    method WriteHTML {filename args} {
+        # TODO transplanted from presentationwriter, needs rewrite
+        set doc [dom createDocument html]
+        set root [$doc documentElement]
+        $root appendFromList [format {
+            head {} {
+                {link {rel stylesheet type text/css href csvops.css} {}}
+                {title {} {{#text {%s}}}}
+            }
+        } [mc {output created by csvops}]]
+        $root appendFromList {body {} {}}
+        set body [$root lastChild]
+        foreach tbl $args {
+            $body appendChild [$tbl toDOM $doc]
+        }
+        ::fileutil::writeFile $filename [$doc asHTML]
+        $doc delete
     }
 
     method eval2 args {
@@ -135,7 +217,7 @@ oo::class create DB {
             } elseif {[string is double -strict $flval]} {
                 set flval
             } else {
-                format '%s' $value
+                format '%s' [string map {' ''} $value]
             }
         }
     }

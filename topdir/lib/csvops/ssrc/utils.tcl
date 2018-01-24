@@ -109,6 +109,24 @@ proc round {val sigdig decimals {decimalChar ,}} {
     string map [list . $decimalChar] [format %.${decimals}f [format %.${sigdig}g $val]]
 }
 
+proc yearDistance {year0 {year1 {}}} {
+    # calculates the distance between two years, with the later year by default
+    # being the current
+    if {$year1 eq {}} {set year1 [clock format [clock seconds] -format %Y]}
+    expr {$year1 - $year0}
+}
+
+proc extendRow {m n} {
+    # extend matrix 'm' if 'n'-current number of columns > 0
+    set diff [expr {$n - [$m columns]}]
+    
+    if {$diff > 0} {
+        $m add columns $diff
+    }
+}
+
+return
+
 proc _serialCompareEqual {c0 c1} {
     # collects a list of booleans that describe the equality of non-decimal values in two columns
     lmap e0 $c0 e1 $c1 {
@@ -134,14 +152,7 @@ proc _serialCompareEmpty {c0 c1} {
     }
 }
 
-proc yearDistance {year0 {year1 {}}} {
-    # calculates the distance between two years, with the later year by default
-    # being the current
-    if {$year1 eq {}} {set year1 [clock format [clock seconds] -format %Y]}
-    expr {$year1 - $year0}
-}
-
-proc dbjoin args {
+proc _dbjoin args {
     if {[llength $args] == 4} {
         lassign $args mode left right writer
     } elseif {[llength $args] == 3} {
@@ -167,11 +178,3 @@ proc dbjoin args {
     $writer deserialize [list $nrows $ncols $writerData]
 }
 
-proc extendRow {m n} {
-    # extend matrix 'm' if 'n'-current number of columns > 0
-    set diff [expr {$n - [$m columns]}]
-    
-    if {$diff > 0} {
-        $m add columns $diff
-    }
-}
