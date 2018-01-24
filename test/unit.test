@@ -11,11 +11,9 @@ foreach unit {
 
     write_table
 
-    presentation_addHeader presentation_addRow presentation_get
-    presentation_set presentation_incr presentation_getRow
+    presentation_get presentation_getRow
     presentation_getColumn presentation_rows presentation_columns
-    presentation_toDOM presentation_asLoL presentation_toMatrix
-    presentation_tally presentation_lookupColumn presentationwriter_write
+    presentation_lookupColumn
 
     utils_anon utils_cols utils_getFirstLine utils_dbjoin utils_getdiag
     utils_dayDistance utils_round utils_serialCompareEqual
@@ -30,6 +28,9 @@ foreach unit {
 }
 
 if no {
+    presentation_toDOM presentation_asLoL presentation_toMatrix
+    presentation_addHeader presentation_addRow presentation_set presentation_incr presentation_tally presentationwriter_write
+
     validator_oneOf validator_belongsTo validator_validate
     validator_notOneOf validator_matches validator_matchesOrIsEmpty
     logging_setLabel logging_addMessage
@@ -473,25 +474,29 @@ namespace import ::msgcat::mc
 
 
 ::tcltest::test presentation_get-1.0 {get:} -constraints {presentation_get} -setup {
+    set d [DB new]
+    $d makeTable t1 {id a b c} {{a 45 89 23}}
 } -body {
     # decl: get {row col}
-    set t [Presentation new Foobar 1 2 3]
-    $t addRow a 45 89 23
-    $t get a 2
+    set t [Presentation new Foobar [$d eval2 {SELECT * FROM t1}]]
+    $t get a b
 } -cleanup {
+    $d destroy
     $t destroy
 } -result 89
 
 
 ::tcltest::test presentation_get-1.1 {get:} -constraints {presentation_get} -setup {
+    set d [DB new]
+    $d makeTable t1 {id a b c} {{a 45 89 23}}
 } -body {
     # decl: get {row col}
-    set t [Presentation new Foobar 1 2 3]
-    $t addRow a 45 89 23
-    $t get a 4
+    set t [Presentation new Foobar [$d eval2 {SELECT * FROM t1}]]
+    $t get a d
 } -cleanup {
+    $d destroy
     $t destroy
-} -match glob -result {kolumnrubrik "4" saknas*} -returnCodes error
+} -match glob -result {kolumnrubrik "d" saknas*} -returnCodes error
 
 
 ::tcltest::test presentation_set-1.0 {set:} -constraints {presentation_set} -setup {
@@ -540,49 +545,53 @@ namespace import ::msgcat::mc
 
 
 ::tcltest::test presentation_getRow-1.0 {getRow:} -constraints {presentation_getRow} -setup {
+    set d [DB new]
+    $d makeTable t1 {id a b c} {{a 45 89 23} {b 89 37 82}}
 } -body {
     # decl: getRow row
-    set t [Presentation new Foobar 1 2 3]
-    $t addRow a 45 89 23
-    $t addRow b 89 37 82
+    set t [Presentation new Foobar [$d eval2 {SELECT * FROM t1}]]
     $t getRow a
 } -cleanup {
+    $d destroy
     $t destroy
 } -result {a 45 89 23}
 
 
 ::tcltest::test presentation_getColumn-1.0 {getColumn:} -constraints {presentation_getColumn} -setup {
+    set d [DB new]
+    $d makeTable t1 {id a b c} {{a 45 89 23} {b 89 37 82}}
 } -body {
     # decl: getColumn col
-    set t [Presentation new Foobar 1 2 3]
-    $t addRow a 45 89 23
-    $t addRow b 89 37 82
-    $t getColumn 2
+    set t [Presentation new Foobar [$d eval2 {SELECT * FROM t1}]]
+    $t getColumn b
 } -cleanup {
+    $d destroy
     $t destroy
-} -result {2 89 37}
+} -result {89 37}
 
 
 ::tcltest::test presentation_rows-1.0 {rows:} -constraints {presentation_rows} -setup {
+    set d [DB new]
+    $d makeTable t1 {id a b c} {{a 45 89 23} {b 89 37 82}}
 } -body {
     # decl: rows {}
-    set t [Presentation new Foobar 1 2 3]
-    $t addRow a 45 89 23
-    $t addRow b 89 37 82
+    set t [Presentation new Foobar [$d eval2 {SELECT * FROM t1}]]
     $t rows
 } -cleanup {
+    $d destroy
     $t destroy
-} -result 3
+} -result 2
 
 
 ::tcltest::test presentation_columns-1.0 {columns:} -constraints {presentation_columns} -setup {
+    set d [DB new]
+    $d makeTable t1 {id a b c} {{a 45 89 23} {b 89 37 82}}
 } -body {
     # decl: columns {}
-    set t [Presentation new Foobar 1 2 3]
-    $t addRow a 45 89 23
-    $t addRow b 89 37 82
+    set t [Presentation new Foobar [$d eval2 {SELECT * FROM t1}]]
     $t columns
 } -cleanup {
+    $d destroy
     $t destroy
 } -result 4
 
@@ -638,15 +647,18 @@ namespace import ::msgcat::mc
 
 
 ::tcltest::test presentation_tally-1.0 {tally:} -constraints {presentation_tally} -setup {
+    set d [DB new]
+    $d makeTable t1 {a b c} {{1 2 3}}
 } -body {
     # decl: tally args
-    set t [Presentation new Foobar 1 2 3]
+    set t [Presentation new Foobar [$d eval2 {SELECT * FROM t1}]]
     $t tally foo 1
     $t tally bar 2
     $t tally baz 3
     $t makeDistribution value 0 -dictionary
     $t asLoL
 } -cleanup {
+    $d destroy
     $t destroy
 } -result {{Foobar 1 2 3} {bar 0 1 0} {baz 0 0 1} {foo 1 0 0}}
 
@@ -717,10 +729,13 @@ namespace import ::msgcat::mc
 
 
 ::tcltest::test presentation_lookupColumn-1.0 {} -constraints {presentation_lookupColumn} -setup {
+    set d [DB new]
+    $d makeTable t1 {a b c} {{1 2 3}}
 } -body {
-    set t [Presentation new Foobar 1 a]
-    $t lookupColumn a
+    set t [Presentation new Foobar [$d eval2 {SELECT * FROM t1}]]
+    $t lookupColumn b
 } -cleanup {
+    $d destroy
     $t destroy
 } -result 2
 

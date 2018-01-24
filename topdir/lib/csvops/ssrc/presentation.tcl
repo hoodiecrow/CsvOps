@@ -2,21 +2,13 @@
 # a class that can create data tables
 
 oo::class create Presentation {
-    variable m distribution
+    variable label data m distribution
 
     constructor args {
-        my addHeader {*}$args
-        if {[llength [info commands ::csvops::log]] < 1} {
-            proc log args {}
-        }
-        log addMessage {%s created} "Presentation [self]"
+        lassign $args label data
     }
 
-    destructor {
-        catch {$m delete}
-        log addMessage {%s destroyed} "Presentation [self]"
-    }
-
+    if no {
     method CheckLabel args {
         lassign [self target] def method
         if {$def ne "::oo::object" &&
@@ -30,7 +22,9 @@ oo::class create Presentation {
         next {*}$args
     }
     filter CheckLabel
+    }
 
+    if no {
     method addHeader args {
         if {[llength $args] > 1} {
             catch {$m delete}
@@ -45,46 +39,50 @@ oo::class create Presentation {
     method addRow args {
         $m add row $args
     }
+    }
 
     method getColumnKeys {} {
-        lrange [$m get row 0] 1 end
+        dict get $data *
     }
 
     method getRowKeys {} {
-        lrange [$m get column 0] 1 end
+        lrange [dict keys $data] 1 end
     }
 
     method getLabel {} {
-        $m get cell 0 0
+        set label
     }
 
-    method LookupDim {dim x} {
-        switch $dim {
-            row {set range [$m get column 0]}
-            column {set range [$m get row 0]}
-            default {
-                return -code error [mc {bad dimension %s} $dim]
-            }
-        }
-        set idx [lsearch [lrange $range 1 end] $x]
+    method lookupColumn col {
+        set idx [lsearch [my getColumnKeys] $col]
         if {$idx < 0} {
-            return -code error [mc "$dim header %s missing" $x]
+            return -code error [mc "column header %s missing" $col]
+        }
+        # TODO do I really need to incr and then -1?
+        incr idx
+    }
+
+    method lookupRow row {
+        # TODO assumes row id is in first column, may have to refine that
+        set idx [lsearch -index 0 [lrange [dict values $data] 1 end] $row]
+        if {$idx < 0} {
+            return -code error [mc "row header %s missing" $row]
         }
         incr idx
     }
 
-    forward lookupColumn my LookupDim column
-    forward lookupRow my LookupDim row
-
     method get {row col} {
-        $m get cell [my LookupDim column $col] [my LookupDim row $row]
+        lindex [dict get $data [expr {[my lookupRow $row]-1}]] [my lookupColumn $col]-1
     }
 
+    if no {
     method set {row col val} {
         $m set cell [my LookupDim column $col] [my LookupDim row $row] $val
         return $val
     }
+    }
 
+    if no {
     method incr {row col {inc 1}} {
         set c [my LookupDim column $col]
         set r [my LookupDim row $row]
@@ -95,6 +93,7 @@ oo::class create Presentation {
         }
         return $val
     }
+    }
 
     method tally args {
         if {[lindex $args 0] eq {}} return
@@ -102,19 +101,25 @@ oo::class create Presentation {
     }
 
     method getRow row {
-        $m get row [my LookupDim row $row]
+        # TODO assumes row id is in first column, may have to refine that
+        lsearch -inline -index 0 [lrange [dict values $data] 1 end] $row
     }
 
     method getColumn col {
-        $m get column [my LookupDim column $col]
+        set idx [my lookupColumn $col]
+        set res {}
+        dict for {key row} [lrange $data 2 end] {
+            lappend res [lindex $row $idx-1]
+        }
+        return $res
     }
 
     method rows {} {
-        $m rows
+        expr {[dict size $data] - 1}
     }
 
     method columns {} {
-        $m columns
+        llength [dict get $data *]
     }
 
     method makeDistribution {by maxlen args} {
