@@ -11,8 +11,6 @@ foreach unit {
 
     write_table
 
-    presentation_rows presentation_columns presentation_lookupColumn
-
     utils_anon utils_cols utils_getFirstLine utils_dbjoin utils_getdiag
     utils_dayDistance utils_round utils_serialCompareEqual
     utils_serialCompareEqualDecimal utils_serialCompareEmpty utils_yearDistance
@@ -25,9 +23,9 @@ foreach unit {
 }
 
 if no {
-    # superc by sql: presentation_get presentation_getRow presentation_getColumn
-    presentation_toDOM presentation_asLoL presentation_toMatrix
-    presentation_addHeader presentation_addRow presentation_set presentation_incr presentation_tally presentationwriter_write
+    presentation_toDOM presentation_tally
+    
+    presentationwriter_write
 
     validator_oneOf validator_belongsTo validator_validate
     validator_notOneOf validator_matches validator_matchesOrIsEmpty
@@ -468,207 +466,6 @@ namespace import ::msgcat::mc
 } -result {3 0}
 
 
-::tcltest::test presentation_addHeader-1.0 {addHeader:} -constraints {presentation_addHeader} -setup {
-} -body {
-    # decl: addHeader {_label args}
-    set t [Presentation new]
-    $t addHeader Foobar 1 2 3
-    $t asLoL
-} -cleanup {
-    $t destroy
-} -result {{Foobar 1 2 3}}
-
-
-::tcltest::test presentation_addHeader-1.1 {addHeader:} -constraints {presentation_addHeader} -setup {
-} -body {
-    # decl: addHeader {_label args}
-    set t [Presentation new]
-    $t addHeader Foobar
-    $t asLoL
-} -cleanup {
-    $t destroy
-} -match glob -result {tabellen finns inte*} -returnCodes error
-
-
-::tcltest::test presentation_addHeader-1.2 {addHeader:} -constraints {presentation_addHeader} -setup {
-} -body {
-    # decl: addHeader {_label args}
-    set t [Presentation new]
-    $t addHeader
-    $t asLoL
-} -cleanup {
-    $t destroy
-} -match glob -result {tabellen finns inte*} -returnCodes error
-
-
-::tcltest::test presentation_addRow-1.0 {addRow:} -constraints {presentation_addRow} -setup {
-} -body {
-    # decl: addRow {key args}
-    set t [Presentation new Foobar 1 2 3]
-    $t addRow a 45 89 23
-    $t asLoL
-} -cleanup {
-    $t destroy
-} -result {{Foobar 1 2 3} {a 45 89 23}}
-
-
-::tcltest::test presentation_addRow-1.1 {addRow:} -constraints {presentation_addRow} -setup {
-} -body {
-    # decl: addRow {key args}
-    set t [Presentation new Foobar 1 2 3]
-    $t addRow a
-    $t asLoL
-} -cleanup {
-    $t destroy
-} -result {{Foobar 1 2 3} {a {} {} {}}}
-
-
-::tcltest::test presentation_get-1.0 {get:} -constraints {presentation_get} -setup {
-    set d [DB new]
-    $d makeTable t1 {id a b c} {{a 45 89 23}}
-} -body {
-    if no {
-    # decl: get {row col}
-    set t [Presentation new Foobar [$d eval2 {SELECT * FROM t1}]]
-    $t get a b
-    } else {
-    $d eval {SELECT b FROM t1 WHERE id='a'}
-    }
-} -cleanup {
-    $d destroy
-    catch {$t destroy}
-} -result 89
-
-
-::tcltest::test presentation_get-1.1 {get:} -constraints {presentation_get} -setup {
-    set d [DB new]
-    $d makeTable t1 {id a b c} {{a 45 89 23}}
-} -body {
-    # decl: get {row col}
-    set t [Presentation new Foobar [$d eval2 {SELECT * FROM t1}]]
-    $t get a d
-} -cleanup {
-    $d destroy
-    $t destroy
-} -match glob -result {kolumnrubrik "d" saknas*} -returnCodes error
-
-
-::tcltest::test presentation_set-1.0 {set:} -constraints {presentation_set} -setup {
-} -body {
-    # decl: set {row col val}
-    set t [Presentation new Foobar 1 2 3]
-    $t addRow a 45 89 23
-    $t set a 2 33
-    $t get a 2
-} -cleanup {
-    $t destroy
-} -result 33
-
-
-::tcltest::test presentation_incr-1.0 {incr:} -constraints {presentation_incr} -setup {
-} -body {
-    # decl: incr {row col args}
-    set t [Presentation new Foobar 1 2 3]
-    $t addRow a 45 89 23
-    $t incr a 2
-} -cleanup {
-    $t destroy
-} -result 90
-
-
-::tcltest::test presentation_incr-1.1 {incr:} -constraints {presentation_incr} -setup {
-} -body {
-    # decl: incr {row col args}
-    set t [Presentation new Foobar 1 2 3]
-    $t addRow a 45 89 23
-    $t incr a 2 15
-} -cleanup {
-    $t destroy
-} -result 104
-
-
-::tcltest::test presentation_incr-1.2 {incr:} -constraints {presentation_incr} -setup {
-} -body {
-    # decl: incr {row col args}
-    set t [Presentation new Foobar 1 2 3]
-    $t addRow a 45 89 23
-    $t incr a 2 {}
-} -cleanup {
-    $t destroy
-} -result 89
-
-
-::tcltest::test presentation_getRow-1.0 {getRow:} -constraints {presentation_getRow} -setup {
-    set d [DB new]
-    $d makeTable t1 {id a b c} {{a 45 89 23} {b 89 37 82}}
-} -body {
-    if no {
-    # decl: getRow row
-    set t [Presentation new Foobar [$d eval2 {SELECT * FROM t1}]]
-    $t getRow a
-    } else {
-    $d eval {SELECT * FROM t1 WHERE id='a'}
-    }
-} -cleanup {
-    $d destroy
-    catch {$t destroy}
-} -result {a 45 89 23}
-
-
-::tcltest::test presentation_getColumn-1.0 {getColumn:} -constraints {presentation_getColumn} -setup {
-    set d [DB new]
-    $d makeTable t1 {id a b c} {{a 45 89 23} {b 89 37 82}}
-} -body {
-    if no {
-    # decl: getColumn col
-    set t [Presentation new Foobar [$d eval2 {SELECT * FROM t1}]]
-    $t getColumn b
-    } else {
-    $d eval {SELECT b FROM t1}
-    }
-} -cleanup {
-    $d destroy
-    catch {$t destroy}
-} -result {89 37}
-
-
-::tcltest::test presentation_rows-1.0 {rows:} -constraints {presentation_rows} -setup {
-    set d [DB new]
-    $d makeTable t1 {id a b c} {{a 45 89 23} {b 89 37 82}}
-} -body {
-    if no {
-    # decl: rows {}
-    set t [Presentation new Foobar [$d eval2 {SELECT * FROM t1}]]
-    $t rows
-    } else {
-    $d eval {SELECT COUNT(*) FROM t1}
-    }
-} -cleanup {
-    $d destroy
-    catch {$t destroy}
-} -result 2
-
-
-::tcltest::test presentation_columns-1.0 {columns:} -constraints {presentation_columns} -setup {
-    set d [DB new]
-    $d makeTable t1 {id a b c} {{a 45 89 23} {b 89 37 82}}
-} -body {
-    if no {
-    # decl: columns {}
-    set t [Presentation new Foobar [$d eval2 {SELECT * FROM t1}]]
-    $t columns
-    } elseif no {
-    # ... added in SQLite version 3.16.0 (2017-01-02). Prior versions of SQLite cannot use this feature.
-    $d eval {select count(*) from pragma table_info('t1')}
-    } else {
-    llength [dict get [$d eval2 {select * from t1}] *]
-    }
-} -cleanup {
-    $d destroy
-    catch {$t destroy}
-} -result 4
-
-
 ::tcltest::test presentation_toDOM-1.0 {toDOM:} -constraints {presentation_toDOM} -setup {
 } -body {
     # decl: toDOM doc
@@ -691,32 +488,6 @@ namespace import ::msgcat::mc
 <th>b</th><td>89</td><td>37</td><td>82</td>
 </tr>
 </table></html>}
-
-
-::tcltest::test presentation_asLoL-1.0 {asLoL:} -constraints {presentation_asLoL} -setup {
-} -body {
-    # decl: asLoL {}
-    set t [Presentation new Foobar 1 2 3]
-    $t addRow a 45 89 23
-    $t addRow b 89 37 82
-    $t asLoL
-} -cleanup {
-    $t destroy
-} -result {{Foobar 1 2 3} {a 45 89 23} {b 89 37 82}}
-
-
-::tcltest::test presentation_toMatrix-1.0 {toMatrix:} -constraints {presentation_toMatrix} -setup {
-} -body {
-    # decl: toMatrix {}
-    set t [Presentation new Foobar 1 2 3]
-    $t addRow a 45 89 23
-    $t addRow b 89 37 82
-    set m [$t toMatrix [::struct::matrix]]
-    $m get cell 3 2
-} -cleanup {
-    $t destroy
-    $m destroy
-} -result 82
 
 
 ::tcltest::test presentation_tally-1.0 {tally:} -constraints {presentation_tally} -setup {
@@ -799,22 +570,6 @@ namespace import ::msgcat::mc
 } -cleanup {
     $t destroy
 } -result {{Foobar 1} {bar 2} {baz 1}}
-
-
-::tcltest::test presentation_lookupColumn-1.0 {} -constraints {presentation_lookupColumn} -setup {
-    set d [DB new]
-    $d makeTable t1 {a b c} {{1 2 3}}
-} -body {
-    if no {
-    set t [Presentation new Foobar [$d eval2 {SELECT * FROM t1}]]
-    $t lookupColumn b
-    } else {
-    $d eval {SELECT b FROM t1}
-    }
-} -cleanup {
-    $d destroy
-    catch {$t destroy}
-} -result 2
 
 
 ::tcltest::test presentationwriter_write-1.0 {} -constraints {presentationwriter_write} -setup {

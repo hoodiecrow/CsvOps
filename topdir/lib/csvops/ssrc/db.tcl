@@ -1,12 +1,9 @@
-package require csv
 
 if {[info commands ::DB] ne {}} {
     return
 }
 
-if {[info commands ::Table] ne {}} {
-    return
-}
+package require csv
 
 oo::class create DB {
     variable options
@@ -53,6 +50,57 @@ oo::class create DB {
             set columns [join $args ,]
             dbcmd eval [format {CREATE TABLE %s (%s)} $tableid $columns]
         }
+    }
+
+    method toDOM doc {
+        # TODO transplanted from presentation, needs rewrite
+        set tnode [$doc createElement table]
+
+        dom createNodeCmd elementNode caption
+        dom createNodeCmd elementNode tr
+        dom createNodeCmd elementNode th
+        dom createNodeCmd elementNode td
+        dom createNodeCmd textNode t
+
+        $tnode appendFromScript {caption {t [my getLabel]}}
+        for {set i 0} {$i < [$m rows]} {incr i} {
+            set vals [lassign [$m get row $i] rowkey]
+            if {$i == 0} {
+                set rowkey {}
+                set nc th
+            } else {
+                set nc td
+            }
+            $tnode appendFromScript {
+                tr {
+                    th {t $rowkey}
+                    foreach val $vals {
+                        $nc {t $val}
+                    }
+                }
+            }
+        }
+
+        return $tnode
+    }
+
+    method WriteHTML {filename args} {
+        # TODO transplanted from presentationwriter, needs rewrite
+        set doc [dom createDocument html]
+        set root [$doc documentElement]
+        $root appendFromList [format {
+            head {} {
+                {link {rel stylesheet type text/css href csvops.css} {}}
+                {title {} {{#text {%s}}}}
+            }
+        } [mc {output created by csvops}]]
+        $root appendFromList {body {} {}}
+        set body [$root lastChild]
+        foreach tbl $args {
+            $body appendChild [$tbl toDOM $doc]
+        }
+        ::fileutil::writeFile $filename [$doc asHTML]
+        $doc delete
     }
 
     method eval2 args {
