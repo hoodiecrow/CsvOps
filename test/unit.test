@@ -23,18 +23,13 @@ foreach unit {
 
     validator_oneOf validator_matches validator_validate 
 
-    presentation_tally 
+    presentation_tally dump_html 
 
 } {
     ::tcltest::testConstraint $unit 1
 }
 
-if no {
-    presentation_toDOM presentationwriter_write
-
-}
-
-    package require sqlite3
+package require sqlite3
 
 ::tcltest::loadTestedCommands
 
@@ -492,30 +487,6 @@ namespace import ::msgcat::mc
 } -result {3 0}
 
 
-::tcltest::test presentation_toDOM-1.0 {toDOM:} -constraints {presentation_toDOM} -setup {
-} -body {
-    # decl: toDOM doc
-    set t [Presentation new Foobar 1 2 3]
-    $t addRow a 45 89 23
-    $t addRow b 89 37 82
-    set doc [dom createDocument html]
-    set root [$doc documentElement]
-    $root appendChild [$t toDOM $doc]
-    $doc asHTML
-} -cleanup {
-    $t destroy
-    $doc delete
-} -result {<html><table>
-<caption>Foobar</caption><tr>
-<th></th><th>1</th><th>2</th><th>3</th>
-</tr><tr>
-<th>a</th><td>45</td><td>89</td><td>23</td>
-</tr><tr>
-<th>b</th><td>89</td><td>37</td><td>82</td>
-</tr>
-</table></html>}
-
-
 ::tcltest::test presentation_tally-1.0 {tally:} -constraints {presentation_tally} -setup {
     set d [DB new]
     $d create t1 a b c
@@ -549,46 +520,23 @@ namespace import ::msgcat::mc
 } -result {* {foo bar baz} 0 {3 2 1}}
 
 
-::tcltest::test presentationwriter_write-1.0 {} -constraints {presentationwriter_write} -setup {
-    ::tcltest::makeFile {} foo.csv
+::tcltest::test dump_html-1.0 {} -constraints {dump_html} -setup {
+    set d [DB new]
+    $d create t1 a b c
+    $d fillTable t1 {45 89 23} {89 37 82}
 } -body {
-    set t [Presentation new Foobar 1 2 3]
-    $t addRow a 45 89 23
-    $t addRow b 89 37 82
-    set w [PresentationWriter new]
-    $w write [file join [tcltest::temporaryDirectory] foo.csv] $t
-    ::tcltest::viewFile [file join [tcltest::temporaryDirectory] foo.csv]
+    $d html t1 Foobar
 } -cleanup {
-    $t destroy
-} -result {Foobar;1;2;3
-a;45;89;23
-b;89;37;82}
-
-
-::tcltest::test presentationwriter_write-1.0 {} -constraints {presentationwriter_write} -setup {
-    ::tcltest::makeFile {} foo.html
-} -body {
-    set t [Presentation new Foobar 1 2 3]
-    $t addRow a 45 89 23
-    $t addRow b 89 37 82
-    set w [PresentationWriter new]
-    $w write [file join [tcltest::temporaryDirectory] foo.html] $t
-    ::tcltest::viewFile [file join [tcltest::temporaryDirectory] foo.html]
-} -cleanup {
-    $t destroy
-} -result {<html>
-<head>
-<link rel="stylesheet" type="text/css" href="csvops.css"><title>Utmatning skapad av csvops</title>
-</head><body><table>
+    $d destroy
+} -result {<table>
 <caption>Foobar</caption><tr>
-<th></th><th>1</th><th>2</th><th>3</th>
+<th></th><th>a</th><th>b</th><th>c</th>
 </tr><tr>
-<th>a</th><td>45</td><td>89</td><td>23</td>
+<th>0</th><td>45</td><td>89</td><td>23</td>
 </tr><tr>
-<th>b</th><td>89</td><td>37</td><td>82</td>
+<th>1</th><td>89</td><td>37</td><td>82</td>
 </tr>
-</table></body>
-</html>}
+</table>}
 
 
 ::tcltest::test utils_anon-1.0 {anon:} -constraints {utils_anon} -setup {
