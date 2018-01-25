@@ -21,7 +21,7 @@ foreach unit {
     
     result_intersect result_except result_range result_order_by result_select
 
-    result_each validator_oneOf validator_matches validator_validate 
+    validator_oneOf validator_matches validator_validate 
     
 } {
     ::tcltest::testConstraint $unit 1

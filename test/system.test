@@ -29,14 +29,14 @@ set FOO_CO [file join [::tcltest::configure -tmpdir] foo.co]
 } -match glob -result {Cannot read file "", does not exist*} -returnCodes error
 
 
-::tcltest::test system-1.1 {} -constraints {skip system} -setup {
+::tcltest::test system-1.1 {} -constraints {system} -setup {
 } -body {
     {*}$EXEC foo:bar
 } -cleanup {
 } -match glob -result {Cannot read file "foo:bar", does not exist*} -returnCodes error
 
 
-::tcltest::test system-1.2 {} -constraints {skip system} -setup {
+::tcltest::test system-1.2 {} -constraints {system} -setup {
     ::tcltest::makeFile {puts "I'm foo"} foo.co
 } -body {
     {*}$EXEC $FOO_CO
@@ -44,17 +44,19 @@ set FOO_CO [file join [::tcltest::configure -tmpdir] foo.co]
 } -result {I'm foo}
 
 
-::tcltest::test system-2.0 {options: defaults} -constraints {skip system} -setup {
+::tcltest::test system-2.0 {options: defaults} -constraints {system} -setup {
     ::tcltest::makeFile {
         ::fileutil::writeFile foo.out [lmap opt [lsort [array names ::options]] {
-            list $opt $options($opt)
+            list $opt $::options($opt)
         }]
     } foo.co
     ::tcltest::makeFile {} foo.out
+    log::lvSuppressLE i 0
 } -body {
     {*}$EXEC $FOO_CO
     ::tcltest::viewFile foo.out
 } -cleanup {
+    log::lvSuppressLE i 1
 } -result {{-alternate 0} {-cols {}} {-expand auto} {-fields {}} {-rows :} {-separator {;}}}
 
 
