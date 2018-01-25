@@ -22,11 +22,11 @@ if {![file exists $STARKITS]} {
 set EXEC [list exec tclsh [file join $STARKITS csvops.kit]]
 set FOO_CO [file join [::tcltest::configure -tmpdir] foo.co]
 
-::tcltest::test system-1.0 {} -constraints {skip system} -setup {
+::tcltest::test system-1.0 {Changed running without filename from error to just open console.} -constraints {system} -setup {
 } -body {
     {*}$EXEC
 } -cleanup {
-} -match glob -result {Cannot read file "", does not exist*} -returnCodes error
+} -result {}
 
 
 ::tcltest::test system-1.1 {} -constraints {system} -setup {
