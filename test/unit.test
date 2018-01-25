@@ -22,13 +22,15 @@ foreach unit {
     result_intersect result_except result_range result_order_by result_select
 
     validator_oneOf validator_matches validator_validate 
-    
+
+    presentation_tally 
+
 } {
     ::tcltest::testConstraint $unit 1
 }
 
 if no {
-    presentation_toDOM presentation_tally presentationwriter_write
+    presentation_toDOM presentationwriter_write
 
 }
 
@@ -517,84 +519,34 @@ namespace import ::msgcat::mc
 ::tcltest::test presentation_tally-1.0 {tally:} -constraints {presentation_tally} -setup {
     set d [DB new]
     $d create t1 a b c
-    $d fillTable t1 {1 2 3}
 } -body {
-    # decl: tally args
-    set t [Presentation new Foobar [$d dict {SELECT * FROM t1}]]
-    $t tally foo 1
-    $t tally bar 2
-    $t tally baz 3
-    $t makeDistribution value 0 -dictionary
-    $t asLoL
+    $d tally
+    $d tally a
+    $d tally b
+    $d tally c
+    $d insertTally t1
+    $d dict {SELECT * FROM t1}
 } -cleanup {
     $d destroy
-    $t destroy
-} -result {{Foobar 1 2 3} {bar 0 1 0} {baz 0 0 1} {foo 1 0 0}}
+} -result {* {a b c} 0 {1 1 1}}
 
 
 ::tcltest::test presentation_tally-1.1 {tally:} -constraints {presentation_tally} -setup {
+    set d [DB new]
+    $d create t1 foo bar baz
 } -body {
-    # decl: tally args
-    set t [Presentation new Foobar 1 2 3]
-    $t tally foo 1
-    $t tally bar 2
-    $t tally baz 3
-    $t makeDistribution value 2 -dictionary
-    $t asLoL
+    $d tally
+    $d tally foo
+    $d tally foo
+    $d tally foo
+    $d tally bar
+    $d tally bar
+    $d tally baz
+    $d insertTally t1
+    $d dict {SELECT * FROM t1}
 } -cleanup {
-    $t destroy
-} -result {{Foobar 1 2 3} {bar 0 1 0} {baz 0 0 1}}
-
-
-::tcltest::test presentation_tally-1.2 {tally:} -constraints {presentation_tally} -setup {
-} -body {
-    # decl: tally args
-    set t [Presentation new Foobar 1]
-    $t tally foo
-    $t tally foo
-    $t tally foo
-    $t tally bar
-    $t tally bar
-    $t tally baz
-    $t makeDistribution value 0 -integer -decreasing
-    $t asLoL
-} -cleanup {
-    $t destroy
-} -result {{Foobar 1} {foo 3} {bar 2} {baz 1}}
-
-
-::tcltest::test presentation_tally-1.3 {tally:} -constraints {presentation_tally} -setup {
-} -body {
-    # decl: tally args
-    set t [Presentation new Foobar 1]
-    $t tally foo
-    $t tally foo
-    $t tally foo
-    $t tally bar
-    $t tally bar
-    $t tally baz
-    $t makeDistribution name 0 -dictionary
-    $t asLoL
-} -cleanup {
-    $t destroy
-} -result {{Foobar 1} {bar 2} {baz 1} {foo 3}}
-
-
-::tcltest::test presentation_tally-1.4 {tally:} -constraints {presentation_tally} -setup {
-} -body {
-    # decl: tally args
-    set t [Presentation new Foobar 1]
-    $t tally foo
-    $t tally foo
-    $t tally foo
-    $t tally bar
-    $t tally bar
-    $t tally baz
-    $t makeDistribution name 2 -dictionary
-    $t asLoL
-} -cleanup {
-    $t destroy
-} -result {{Foobar 1} {bar 2} {baz 1}}
+    $d destroy
+} -result {* {foo bar baz} 0 {3 2 1}}
 
 
 ::tcltest::test presentationwriter_write-1.0 {} -constraints {presentationwriter_write} -setup {

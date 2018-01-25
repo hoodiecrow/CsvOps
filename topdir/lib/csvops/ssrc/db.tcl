@@ -3,7 +3,7 @@ package require csv
 package require sqlite3
 
 oo::class create DB {
-    variable options
+    variable options tally
 
     constructor {{filename :memory:}} {
         sqlite3 [self namespace]::dbcmd $filename
@@ -181,6 +181,23 @@ oo::class create DB {
             lappend result [my InputFilterRow [::csv::split $line $options(-separator)]]
         }
         return $result
+    }
+
+    method tally {{key {}}} {
+        if {$key eq {}} {
+            set tally {}
+        } else {
+            dict incr tally $key
+        }
+    }
+
+    method insertTally tableid {
+        my insert $tableid [dict values $tally]
+        set tally {}
+    }
+
+    method dumpTally {} {
+        set tally
     }
 
     method toDOM doc {
