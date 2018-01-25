@@ -13,6 +13,8 @@ proc Script_PolicyInit slave {
 
         interp alias $slave ::open {} ::safe::AliasOpen $slave
 
+        interp alias $slave ::mc {} ::mc
+
         # ::fileutil needs these, safe::loadTk needs normalize
         foreach subcommand {exists isfile writable readable size mkdir normalize} {
             interp alias $slave ::tcl::file::$subcommand {} ::safe::AliasFileSubcommand2 $slave $subcommand
@@ -21,10 +23,12 @@ proc Script_PolicyInit slave {
 
     interp alias $slave ::log {} ::csvops::log
 
+    if no {
     if no { # msgcat support
         setupMsgcat $slave sv msgs {.. msgs}
     } else {
         interp alias $slave mc $slave format
+    }
     }
 
     sourceLibrary $slave ssrc
@@ -91,6 +95,7 @@ proc sourceLibrary {slave dir} {
 }
 
 proc setupMsgcat {slave locale args} {
+    error foo
     interp eval $slave {
         package require msgcat
         namespace import ::msgcat::mc

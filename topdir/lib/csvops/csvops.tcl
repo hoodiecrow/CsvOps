@@ -84,6 +84,7 @@ oo::objdefine csvops {
         } else {
         set int {}
         Script_PolicyInit $int
+        #error [interp alias $int mc]
         foreach arg [lrange $args 0 end-1] {
             interp eval $int $arg
         }
