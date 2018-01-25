@@ -2,11 +2,13 @@ package require tcltest
 
 ::tcltest::configure {*}$argv
 
-::tcltest::testConstraint system 0
+::tcltest::testConstraint system 1
 ::tcltest::testConstraint skip 0
 ::tcltest::testConstraint noskip 1
 
 ::tcltest::loadTestedCommands
+
+package require log
 
 file copy -force [file join [::tcltest::configure -testdir] eval.csv] [::tcltest::configure -tmpdir]
 file copy -force [file join [::tcltest::configure -testdir] eval2.csv] [::tcltest::configure -tmpdir]
@@ -20,11 +22,11 @@ if {![file exists $STARKITS]} {
 set EXEC [list exec tclsh [file join $STARKITS csvops.kit]]
 set FOO_CO [file join [::tcltest::configure -tmpdir] foo.co]
 
-::tcltest::test system-1.0 {} -constraints {system} -setup {
+::tcltest::test system-1.0 {Changed running without filename from error to just open console.} -constraints {mute system} -setup {
 } -body {
     {*}$EXEC
 } -cleanup {
-} -match glob -result {Cannot read file "", does not exist*} -returnCodes error
+} -result {}
 
 
 ::tcltest::test system-1.1 {} -constraints {system} -setup {
@@ -45,21 +47,23 @@ set FOO_CO [file join [::tcltest::configure -tmpdir] foo.co]
 ::tcltest::test system-2.0 {options: defaults} -constraints {system} -setup {
     ::tcltest::makeFile {
         ::fileutil::writeFile foo.out [lmap opt [lsort [array names ::options]] {
-            list $opt $options($opt)
+            list $opt $::options($opt)
         }]
     } foo.co
     ::tcltest::makeFile {} foo.out
+    log::lvSuppressLE i 0
 } -body {
     {*}$EXEC $FOO_CO
     ::tcltest::viewFile foo.out
 } -cleanup {
+    log::lvSuppressLE i 1
 } -result {{-alternate 0} {-cols {}} {-expand auto} {-fields {}} {-rows :} {-separator {;}}}
 
 
 ::tcltest::test system-2.1 {options: all} -constraints {system} -setup {
     ::tcltest::makeFile {
         ::fileutil::writeFile foo.out [lmap opt [lsort [array names ::options]] {
-            list $opt $options($opt)
+            list $opt $::options($opt)
         }]
     } foo.co
     ::tcltest::makeFile {} foo.out
@@ -73,7 +77,7 @@ set FOO_CO [file join [::tcltest::configure -tmpdir] foo.co]
 ::tcltest::test system-2.2 {options: abbreviated} -constraints {system} -setup {
     ::tcltest::makeFile {
         ::fileutil::writeFile foo.out [lmap opt [lsort [array names ::options]] {
-            list $opt $options($opt)
+            list $opt $::options($opt)
         }]
     } foo.co
     ::tcltest::makeFile {} foo.out
@@ -84,10 +88,10 @@ set FOO_CO [file join [::tcltest::configure -tmpdir] foo.co]
 } -result {{-alternate 0} {-cols {}} {-expand none} {-fields {}} {-rows :} {-separator {;}}}
 
 
-::tcltest::test system-2.3 {options: -expand unknown value} -constraints {TODO system} -setup {
+::tcltest::test system-2.3 {options: -expand unknown value} -constraints {system} -setup {
     ::tcltest::makeFile {
         ::fileutil::writeFile foo.out [lmap opt [lsort [array names ::options]] {
-            list $opt $options($opt)
+            list $opt $::options($opt)
         }]
     } foo.co
     ::tcltest::makeFile {} foo.out
@@ -101,12 +105,10 @@ set FOO_CO [file join [::tcltest::configure -tmpdir] foo.co]
 ::tcltest::test system-3.0 {copy database} -constraints {system} -setup {
     ::tcltest::makeFile {} foobar.csv
     ::tcltest::makeFile {
-        Reader create s
-        set w [Writer new]
-        $w fields [s fields {a b c d e}]
-        s read eval.csv
-        s get { $w put }
-        $w write foobar.csv
+        DB create s
+        s create t1 a b c d e
+        s loadTable t1 eval.csv
+        s dumpTable -values -decimal . -oseparator , t1 foobar.csv
     } foo.co
 } -body {
     {*}$EXEC -sep , $FOO_CO
@@ -123,12 +125,12 @@ set FOO_CO [file join [::tcltest::configure -tmpdir] foo.co]
 ::tcltest::test system-3.1 {copy two columns from database} -constraints {system} -setup {
     ::tcltest::makeFile {} foobar.csv
     ::tcltest::makeFile {
-        Reader create s -cols {0 1}
-        set w [Writer new]
-        $w fields [s fields {nr msg}]
-        s read eval.csv
-        s get { $w put }
-        $w write foobar.csv
+        DB create s
+        s create t1 a b c d e
+        s loadTable t1 eval.csv
+        s create t2 a b
+        s eval {INSERT INTO t2 SELECT a, b FROM t1}
+        s dumpTable -values -decimal . -oseparator , t2 foobar.csv
     } foo.co
 } -body {
     {*}$EXEC -sep , $FOO_CO
@@ -145,12 +147,12 @@ set FOO_CO [file join [::tcltest::configure -tmpdir] foo.co]
 ::tcltest::test system-3.2 {copy two rows from database} -constraints {system} -setup {
     ::tcltest::makeFile {} foobar.csv
     ::tcltest::makeFile {
-        Reader create s -rows 5:
-        set w [Writer new]
-        $w fields [s fields {a b c d e}]
-        s read eval.csv
-        s get { $w put }
-        $w write foobar.csv
+        DB create s
+        s create t1 a b c d e
+        s loadTable t1 eval.csv
+        s create t2 a b c d e
+        s eval {INSERT INTO t2 SELECT * FROM t1 LIMIT 4,2}
+        s dumpTable -values -decimal . -oseparator , t2 foobar.csv
     } foo.co
 } -body {
     {*}$EXEC -sep , $FOO_CO
@@ -163,15 +165,12 @@ set FOO_CO [file join [::tcltest::configure -tmpdir] foo.co]
 ::tcltest::test system-4.0 {fields: change the value of a field} -constraints {system} -setup {
     ::tcltest::makeFile {} foobar.csv
     ::tcltest::makeFile {
-        Reader create s -cols :2
-        set w [Writer new]
-        $w fields [s fields {nr msg a}]
-        s read eval2.csv
-        s get {
-            set F(a) [expr {$F(a) * 2}]
-            $w put
-        }
-        $w write foobar.csv
+        DB create s
+        s create t1 a b c d e
+        s loadTable t1 eval2.csv
+        s create t2 nr msg a
+        s eval {INSERT INTO t2 SELECT a, b, c * 2 FROM t1}
+        s dumpTable -values -decimal . -oseparator , t2 foobar.csv
     } foo.co
 } -body {
     {*}$EXEC -sep , $FOO_CO
@@ -189,16 +188,12 @@ set FOO_CO [file join [::tcltest::configure -tmpdir] foo.co]
 ::tcltest::test system-4.1 {fields: add a field in output} -constraints {system} -setup {
     ::tcltest::makeFile {} foobar.csv
     ::tcltest::makeFile {
-        Reader create s -cols :2
-        set w [Writer new]
-        s fields {nr msg a}
-        $w fields {nr msg a b}
-        s read eval2.csv
-        s get {
-            set F(b) [expr {$F(a) * 2}]
-            $w put
-        }
-        $w write foobar.csv
+        DB create s
+        s create t1 a b c d e
+        s loadTable t1 eval2.csv
+        s create t2 nr msg a b
+        s eval {INSERT INTO t2 SELECT a, b, c, c * 2 FROM t1}
+        s dumpTable -values -decimal . -oseparator , t2 foobar.csv
     } foo.co
 } -body {
     {*}$EXEC -sep , $FOO_CO
@@ -214,23 +209,25 @@ set FOO_CO [file join [::tcltest::configure -tmpdir] foo.co]
 
 
 ::tcltest::test system-4.2 {fields: remove duplicate ids} -constraints {system} -setup {
+    log::lvSuppressLE i 0
     ::tcltest::makeFile {} foobar.csv
     ::tcltest::makeFile {
-        Reader create s -cols :2
-        set w [Writer new]
-        $w fields [s fields {nr msg a}]
-        s read eval2.csv
-        s get {
-            if {[s unique nr]} {
-                $w put
-            }
+        DB create s
+        s create t1 a b c d e
+        s loadTable t1 eval2.csv
+        set d [s dict -values {SELECT * FROM t1}]
+        set nrs [s eval {SELECT DISTINCT a FROM t1}]
+        s create t2 nr msg a
+        foreach nr $nrs {
+            s insert t2 [lmap item [lrange [lsearch -inline -index 0 $d $nr] 0 2] {format '%s' $item}]
         }
-        $w write foobar.csv
+        s dumpTable -values -decimal . -oseparator , t2 foobar.csv
     } foo.co
 } -body {
     {*}$EXEC -sep , $FOO_CO
     ::tcltest::viewFile foobar.csv
 } -cleanup {
+    log::lvSuppressLE i 1
 } -result {023,EVAL cmd eval in list obj var,26
 024,EVAL cmd eval as list,23
 025,EVAL cmd eval as string,53

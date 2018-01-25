@@ -64,7 +64,9 @@ oo::objdefine csvops {
     }
 
     method RunSafe args {
+        if no {
         ::csvops::log init
+        }
         lappend ::auto_path .
         # TODO kludgy add: topdir/lib
         if no {
@@ -82,13 +84,18 @@ oo::objdefine csvops {
         } else {
         set int {}
         Script_PolicyInit $int
+        #error [interp alias $int mc]
         foreach arg [lrange $args 0 end-1] {
             interp eval $int $arg
         }
         interp eval $int [list try [lindex $args end] on error msg {error [mc {Failure %s} $msg]}]
         }
 
+        if no {
         if {[::csvops::log done]} exit
+        } else {
+        exit
+        }
     }
 
     method RunDebug args {

@@ -2,6 +2,9 @@ package require tcltest
 
 ::tcltest::configure {*}$argv
 
+# TODO on loan, remove
+file copy -force [file join [::tcltest::configure -testdir] eval2.csv] [::tcltest::configure -tmpdir]
+
 ::tcltest::testConstraint skip 0
 ::tcltest::testConstraint noskip 1
 foreach unit {
@@ -17,22 +20,16 @@ foreach unit {
     utils_getdiag_a
     
     result_intersect result_except result_range result_order_by result_select
-    
+
+    validator_oneOf validator_matches validator_validate 
+
+    presentation_tally dump_html 
+
 } {
     ::tcltest::testConstraint $unit 1
 }
 
-if no {
-    presentation_toDOM presentation_tally
-    
-    presentationwriter_write
-
-    validator_oneOf validator_belongsTo validator_validate
-    validator_notOneOf validator_matches validator_matchesOrIsEmpty
-    logging_setLabel logging_addMessage
-}
-
-    package require sqlite3
+package require sqlite3
 
 ::tcltest::loadTestedCommands
 
@@ -78,6 +75,7 @@ namespace import ::msgcat::mc
     set res
 } -cleanup {
     $db destroy
+    log::lvSuppressLE i 1
 } -result {{0 foo ab 1 snarf cd 2 blue ef} {0 foo 1 snarf 2 blue}}
 
 # db borrowed from https://www.w3schools.com/sql
@@ -125,13 +123,14 @@ namespace import ::msgcat::mc
     $db readTable Customers [file join [::tcltest::configure -tmpdir] b.csv]
     # INSERT INTO Customers (CustomerName, ContactName, Address, City, PostalCode, Country)
     # VALUES ('Cardinal', 'Tom B. Erichsen', 'Skagen 21', 'Stavanger', '4006', 'Norway');
-    set columns {CustomerName ContactName Address City PostalCode Country}
-    set values  [split {Cardinal,Tom B. Erichsen,Skagen 21,Stavanger,4006,Norway} ,]
+    set columns {CustomerName,ContactName,Address,City,PostalCode,Country}
+    set values  {'Cardinal','Tom B. Erichsen','Skagen 21','Stavanger',4006,'Norway'}
     $db insert Customers $columns $values
     lappend res [$db select Customers Country]
     set res
 } -cleanup {
     catch {$db destroy}
+    log::lvSuppressLE i 1
 } -result {{Germany Mexico Mexico UK Sweden} {Germany Mexico UK Sweden} 4 {2 3} 1 1 1 {2 3 4 5} {1 2 3 5 4} {4 5 2 3 1} {USA Finland Poland Norway}}
 
 ::tcltest::test sql-methods-1.2 {} -setup {
@@ -140,12 +139,12 @@ namespace import ::msgcat::mc
     set db [DB new]
     $db readTable Customers [file join [::tcltest::configure -tmpdir] a.csv]
     $db readTable Orders [file join [::tcltest::configure -tmpdir] c.csv]
-    lappend res [$db eval2 {
+    lappend res [$db dict {
         SELECT Orders.OrderID, Customers.CustomerName, Orders.OrderDate
         FROM Orders
         INNER JOIN Customers ON Orders.CustomerID=Customers.CustomerID
     }]
-    lappend res [$db eval2 {
+    lappend res [$db dict {
         SELECT Orders.OrderID, Customers.CustomerName, Orders.OrderDate
         FROM Orders
         LEFT JOIN Customers ON Orders.CustomerID=Customers.CustomerID
@@ -285,7 +284,8 @@ namespace import ::msgcat::mc
 ::tcltest::test row_to_array-1.0 {get:} -constraints {row_to_array} -setup {
     ::tcltest::makeFile "1;a;\n2;b;29\n3;c;23" foobar.csv
     set r [DB new]
-    $r makeTable t1 {foo bar baz} [$r read [file join [::tcltest::configure -tmpdir] foobar.csv]]
+    $r create t1 foo bar baz
+    $r loadTable t1 [file join [::tcltest::configure -tmpdir] foobar.csv]
 } -body {
     $r eval {SELECT * FROM t1 LIMIT 0,1} F continue
     $r eval {SELECT * FROM t1 LIMIT 1,1} G continue
@@ -298,7 +298,8 @@ namespace import ::msgcat::mc
 
 ::tcltest::test row_to_vars-1.1 {get:} -constraints {noskip row_to_vars} -setup {
     set p [DB new]
-    $p makeTable t1 {a b c d} {{1 2 3 4} {5 6 7 8}}
+    $p create t1 a b c d
+    $p fillTable t1 {1 2 3 4} {5 6 7 8}
     set res {}
 } -body {
     $p eval {SELECT * FROM t1} {
@@ -312,7 +313,8 @@ namespace import ::msgcat::mc
 
 ::tcltest::test count_rows-1.0 {rows:} -constraints {noskip count_rows} -setup {
     set r [DB new]
-    $r makeTable t1 {a b c d} {{1 2 3 4} {5 6 7 8}}
+    $r create t1 a b c d
+    $r fillTable t1 {1 2 3 4} {5 6 7 8}
 } -body {
     $r eval {SELECT COUNT(*) FROM t1}
 } -cleanup {
@@ -322,7 +324,8 @@ namespace import ::msgcat::mc
 
 ::tcltest::test get_column-1.0 {getColumn:} -constraints {noskip get_column} -setup {
     set p [DB new]
-    $p makeTable t1 {a b c d} {{1 2 3 4} {5 6 7 8}}
+    $p create t1 a b c d
+    $p fillTable t1 {1 2 3 4} {5 6 7 8}
 } -body {
     $p eval {SELECT c FROM t1}
 } -cleanup {
@@ -334,8 +337,10 @@ namespace import ::msgcat::mc
     ::tcltest::makeFile "1;a;\n2;b;29\n3;c;23" foobar.csv
     ::tcltest::makeFile "1;a;83\n2;b;29\n4;c;" bazqux.csv
     set r [DB new]
-    $r makeTable t1 {foo bar baz} [$r read [file join [::tcltest::configure -tmpdir] foobar.csv]]
-    $r makeTable t2 {foo bar baz} [$r read [file join [::tcltest::configure -tmpdir] bazqux.csv]]
+    $r create t1 foo bar baz
+    $r loadTable t1 [file join [::tcltest::configure -tmpdir] foobar.csv]
+    $r create t2 foo bar baz
+    $r loadTable t2 [file join [::tcltest::configure -tmpdir] bazqux.csv]
 } -body {
     set C [$r eval {SELECT foo FROM t1}]
     set D [$r eval {SELECT foo FROM t2}]
@@ -352,8 +357,10 @@ namespace import ::msgcat::mc
     ::tcltest::makeFile "1;a;\n2;b;29\n3;c;23" foobar.csv
     ::tcltest::makeFile "1;a;83\n2;b;29\n4;c;" bazqux.csv
     set r [DB new]
-    $r makeTable t1 {foo bar baz} [$r read [file join [::tcltest::configure -tmpdir] foobar.csv]]
-    $r makeTable t2 {foo bar baz} [$r read [file join [::tcltest::configure -tmpdir] bazqux.csv]]
+    $r create t1 foo bar baz
+    $r loadTable t1 [file join [::tcltest::configure -tmpdir] foobar.csv]
+    $r create t2 foo bar baz
+    $r loadTable t2 [file join [::tcltest::configure -tmpdir] bazqux.csv]
 } -body {
     set C [$r eval {SELECT foo FROM t1}]
     set D [$r eval {SELECT foo FROM t2}]
@@ -370,8 +377,10 @@ namespace import ::msgcat::mc
     ::tcltest::makeFile "1;a;\n2;b;29\n3;c;23" foobar.csv
     ::tcltest::makeFile "1;a;83\n2;b;29\n4;c;" bazqux.csv
     set r [DB new]
-    $r makeTable t1 {foo bar baz} [$r read [file join [::tcltest::configure -tmpdir] foobar.csv]]
-    $r makeTable t2 {foo bar baz} [$r read [file join [::tcltest::configure -tmpdir] bazqux.csv]]
+    $r create t1 foo bar baz
+    $r loadTable t1 [file join [::tcltest::configure -tmpdir] foobar.csv]
+    $r create t2 foo bar baz
+    $r loadTable t2 [file join [::tcltest::configure -tmpdir] bazqux.csv]
 } -body {
     set s1 [$r eval {SELECT SUM(baz) FROM t1}]
     set s2 [$r eval {SELECT SUM(baz) FROM t2}]
@@ -386,8 +395,10 @@ namespace import ::msgcat::mc
     ::tcltest::makeFile "1;a;;1,67\n2;b;29;2,05\n3;c;23;3" foobar.csv
     ::tcltest::makeFile "1;a;83;0,68\n2;b;29;4,12\n4;c;;1,05" bazqux.csv
     set r [DB new]
-    $r makeTable t1 {foo bar baz qux} [$r read [file join [::tcltest::configure -tmpdir] foobar.csv]]
-    $r makeTable t2 {foo bar baz qux} [$r read [file join [::tcltest::configure -tmpdir] bazqux.csv]]
+    $r create t1 foo bar baz qux
+    $r loadTable t1 [file join [::tcltest::configure -tmpdir] foobar.csv]
+    $r create t2 foo bar baz qux
+    $r loadTable t2 [file join [::tcltest::configure -tmpdir] bazqux.csv]
 } -body {
     set s1 [$r eval {SELECT SUM(qux) FROM t1}]
     set s2 [$r eval {SELECT SUM(qux) FROM t2}]
@@ -402,8 +413,10 @@ namespace import ::msgcat::mc
     ::tcltest::makeFile "1;a;;1,67\n2;b;29;2,05\n3;c;23;3" foobar.csv
     ::tcltest::makeFile "1;a;83;0,68\n2;b;29;4,12\n4;c;;1,05" bazqux.csv
     set r [DB new]
-    $r makeTable t1 {foo bar baz qux} [$r read [file join [::tcltest::configure -tmpdir] foobar.csv]]
-    $r makeTable t2 {foo bar baz qux} [$r read [file join [::tcltest::configure -tmpdir] bazqux.csv]]
+    $r create t1 foo bar baz qux
+    $r loadTable t1 [file join [::tcltest::configure -tmpdir] foobar.csv]
+    $r create t2 foo bar baz qux
+    $r loadTable t2 [file join [::tcltest::configure -tmpdir] bazqux.csv]
 } -body {
     lmap s1 [$r eval {SELECT foo FROM t1}] s2 [$r eval {SELECT foo FROM t2}] {
         expr {$s1 eq $s2}
@@ -418,8 +431,10 @@ namespace import ::msgcat::mc
     ::tcltest::makeFile "1;a;;1,67\n2;b;29;2,05\n3;c;23;3" foobar.csv
     ::tcltest::makeFile "1;a;83;0,68\n2;b;29;4,12\n4;c;;1,05" bazqux.csv
     set r [DB new]
-    $r makeTable t1 {foo bar baz qux} [$r read [file join [::tcltest::configure -tmpdir] foobar.csv]]
-    $r makeTable t2 {foo bar baz qux} [$r read [file join [::tcltest::configure -tmpdir] bazqux.csv]]
+    $r create t1 foo bar baz qux
+    $r loadTable t1 [file join [::tcltest::configure -tmpdir] foobar.csv]
+    $r create t2 foo bar baz qux
+    $r loadTable t2 [file join [::tcltest::configure -tmpdir] bazqux.csv]
 } -body {
     lmap s1 [$r eval {SELECT bar FROM t1}] s2 [$r eval {SELECT bar FROM t2}] {
         expr {$s1 eq $s2}
@@ -434,8 +449,10 @@ namespace import ::msgcat::mc
     ::tcltest::makeFile "1;a;;1,67\n2;b;29;2,05\n3;c;23;1,0500" foobar.csv
     ::tcltest::makeFile "1;a;83;0,68\n2;b;29;4,12\n4;c;;1,05" bazqux.csv
     set r [DB new]
-    $r makeTable t1 {foo bar baz qux} [$r read [file join [::tcltest::configure -tmpdir] foobar.csv]]
-    $r makeTable t2 {foo bar baz qux} [$r read [file join [::tcltest::configure -tmpdir] bazqux.csv]]
+    $r create t1 foo bar baz qux
+    $r loadTable t1 [file join [::tcltest::configure -tmpdir] foobar.csv]
+    $r create t2 foo bar baz qux
+    $r loadTable t2 [file join [::tcltest::configure -tmpdir] bazqux.csv]
 } -body {
     lmap s1 [$r eval {SELECT qux FROM t1}] s2 [$r eval {SELECT qux FROM t2}] {
         expr {$s1 eq $s2}
@@ -448,17 +465,21 @@ namespace import ::msgcat::mc
 
 ::tcltest::test handle_empties-1.0 {getColumnValues: skip nulls} -constraints {noskip handle_empties} -setup {
     set p [DB new]
-    $p makeTable t1 {a b c d} {{1 2 3 4} {5 6 {} 8}}
+    $p create t1 a b c d
+    $p fillTable t1 {1 2 3 4} {5 6 '' 8}
 } -body {
     lmap val [$p eval {SELECT c FROM t1}] {if {$val ne {}} {set val} continue}
 } -cleanup {
     $p destroy
+    log::lvSuppressLE i 1
 } -result 3
 
 
 ::tcltest::test handle_empties-1.1 {getColumnValues: set nulls to 0} -constraints {noskip handle_empties} -setup {
+    ::tcltest::makeFile "1;2;3;4\n5;6;;8" empties.csv
     set p [DB new]
-    $p makeTable t1 {a b c d} {{1 2 3 4} {5 6 {} 8}}
+    $p create t1 a b c d
+    $p loadTable t1 [file join [::tcltest::configure -tmpdir] empties.csv]
 } -body {
     lmap val [$p eval {SELECT c FROM t1}] {if {$val ne {}} {set val} {expr 0}}
 } -cleanup {
@@ -466,152 +487,56 @@ namespace import ::msgcat::mc
 } -result {3 0}
 
 
-::tcltest::test presentation_toDOM-1.0 {toDOM:} -constraints {presentation_toDOM} -setup {
-} -body {
-    # decl: toDOM doc
-    set t [Presentation new Foobar 1 2 3]
-    $t addRow a 45 89 23
-    $t addRow b 89 37 82
-    set doc [dom createDocument html]
-    set root [$doc documentElement]
-    $root appendChild [$t toDOM $doc]
-    $doc asHTML
-} -cleanup {
-    $t destroy
-    $doc delete
-} -result {<html><table>
-<caption>Foobar</caption><tr>
-<th></th><th>1</th><th>2</th><th>3</th>
-</tr><tr>
-<th>a</th><td>45</td><td>89</td><td>23</td>
-</tr><tr>
-<th>b</th><td>89</td><td>37</td><td>82</td>
-</tr>
-</table></html>}
-
-
 ::tcltest::test presentation_tally-1.0 {tally:} -constraints {presentation_tally} -setup {
     set d [DB new]
-    $d makeTable t1 {a b c} {{1 2 3}}
+    $d create t1 a b c
 } -body {
-    # decl: tally args
-    set t [Presentation new Foobar [$d eval2 {SELECT * FROM t1}]]
-    $t tally foo 1
-    $t tally bar 2
-    $t tally baz 3
-    $t makeDistribution value 0 -dictionary
-    $t asLoL
+    $d tally
+    $d tally a
+    $d tally b
+    $d tally c
+    $d insertTally t1
+    $d dict {SELECT * FROM t1}
 } -cleanup {
     $d destroy
-    $t destroy
-} -result {{Foobar 1 2 3} {bar 0 1 0} {baz 0 0 1} {foo 1 0 0}}
+} -result {* {a b c} 0 {1 1 1}}
 
 
 ::tcltest::test presentation_tally-1.1 {tally:} -constraints {presentation_tally} -setup {
+    set d [DB new]
+    $d create t1 foo bar baz
 } -body {
-    # decl: tally args
-    set t [Presentation new Foobar 1 2 3]
-    $t tally foo 1
-    $t tally bar 2
-    $t tally baz 3
-    $t makeDistribution value 2 -dictionary
-    $t asLoL
+    $d tally
+    $d tally foo
+    $d tally foo
+    $d tally foo
+    $d tally bar
+    $d tally bar
+    $d tally baz
+    $d insertTally t1
+    $d dict {SELECT * FROM t1}
 } -cleanup {
-    $t destroy
-} -result {{Foobar 1 2 3} {bar 0 1 0} {baz 0 0 1}}
+    $d destroy
+} -result {* {foo bar baz} 0 {3 2 1}}
 
 
-::tcltest::test presentation_tally-1.2 {tally:} -constraints {presentation_tally} -setup {
+::tcltest::test dump_html-1.0 {} -constraints {dump_html} -setup {
+    set d [DB new]
+    $d create t1 a b c
+    $d fillTable t1 {45 89 23} {89 37 82}
 } -body {
-    # decl: tally args
-    set t [Presentation new Foobar 1]
-    $t tally foo
-    $t tally foo
-    $t tally foo
-    $t tally bar
-    $t tally bar
-    $t tally baz
-    $t makeDistribution value 0 -integer -decreasing
-    $t asLoL
+    $d html t1 Foobar
 } -cleanup {
-    $t destroy
-} -result {{Foobar 1} {foo 3} {bar 2} {baz 1}}
-
-
-::tcltest::test presentation_tally-1.3 {tally:} -constraints {presentation_tally} -setup {
-} -body {
-    # decl: tally args
-    set t [Presentation new Foobar 1]
-    $t tally foo
-    $t tally foo
-    $t tally foo
-    $t tally bar
-    $t tally bar
-    $t tally baz
-    $t makeDistribution name 0 -dictionary
-    $t asLoL
-} -cleanup {
-    $t destroy
-} -result {{Foobar 1} {bar 2} {baz 1} {foo 3}}
-
-
-::tcltest::test presentation_tally-1.4 {tally:} -constraints {presentation_tally} -setup {
-} -body {
-    # decl: tally args
-    set t [Presentation new Foobar 1]
-    $t tally foo
-    $t tally foo
-    $t tally foo
-    $t tally bar
-    $t tally bar
-    $t tally baz
-    $t makeDistribution name 2 -dictionary
-    $t asLoL
-} -cleanup {
-    $t destroy
-} -result {{Foobar 1} {bar 2} {baz 1}}
-
-
-::tcltest::test presentationwriter_write-1.0 {} -constraints {presentationwriter_write} -setup {
-    ::tcltest::makeFile {} foo.csv
-} -body {
-    set t [Presentation new Foobar 1 2 3]
-    $t addRow a 45 89 23
-    $t addRow b 89 37 82
-    set w [PresentationWriter new]
-    $w write [file join [tcltest::temporaryDirectory] foo.csv] $t
-    ::tcltest::viewFile [file join [tcltest::temporaryDirectory] foo.csv]
-} -cleanup {
-    $t destroy
-} -result {Foobar;1;2;3
-a;45;89;23
-b;89;37;82}
-
-
-::tcltest::test presentationwriter_write-1.0 {} -constraints {presentationwriter_write} -setup {
-    ::tcltest::makeFile {} foo.html
-} -body {
-    set t [Presentation new Foobar 1 2 3]
-    $t addRow a 45 89 23
-    $t addRow b 89 37 82
-    set w [PresentationWriter new]
-    $w write [file join [tcltest::temporaryDirectory] foo.html] $t
-    ::tcltest::viewFile [file join [tcltest::temporaryDirectory] foo.html]
-} -cleanup {
-    $t destroy
-} -result {<html>
-<head>
-<link rel="stylesheet" type="text/css" href="csvops.css"><title>Utmatning skapad av csvops</title>
-</head><body><table>
+    $d destroy
+} -result {<table>
 <caption>Foobar</caption><tr>
-<th></th><th>1</th><th>2</th><th>3</th>
+<th></th><th>a</th><th>b</th><th>c</th>
 </tr><tr>
-<th>a</th><td>45</td><td>89</td><td>23</td>
+<th>0</th><td>45</td><td>89</td><td>23</td>
 </tr><tr>
-<th>b</th><td>89</td><td>37</td><td>82</td>
+<th>1</th><td>89</td><td>37</td><td>82</td>
 </tr>
-</table></body>
-</html>}
+</table>}
 
 
 ::tcltest::test utils_anon-1.0 {anon:} -constraints {utils_anon} -setup {
@@ -825,102 +750,6 @@ b;89;37;82}
 } -result f7
 
 
-::tcltest::test validator_validate-1.0 {validate:} -constraints {validator_validate} -setup {
-    ::tcltest::makeFile {} validate-output
-    set p [DB new]
-    $p makeTable t1 {a b c d} {{1 2 3 4} {5 6 7 8}}
-} -body {
-    # decl: validate {clauses output}
-    $p validate {
-        F(c) one-of {1 2 3 4}
-        F(c) not-one-of {1 2 3 4}
-        F(c) matches {[1-4]}
-    } [file join [::tcltest::configure -tmpdir] validate-output]
-    ::tcltest::viewFile validate-output
-} -cleanup {
-    $p destroy
-} -match glob -result {Rad 1: v*rde 3 (f*lt F(c)) *r en av {1 2 3 4}
-Rad 2: v*rde 7 (f*lt F(c)) *r inte en av {1 2 3 4}
-Rad 2: v*rde 7 (f*lt F(c)) matchar inte "\[1-4\]"}
-
-
-::tcltest::test validator_validate-1.1 {validate:} -constraints {validator_validate} -setup {
-    ::tcltest::makeFile {} validate-output
-    set p [Reader new]
-    set m [::struct::matrix]
-    $m add columns 4
-    $m add row {1 2 3 4}
-    $m add row {5 6 7 8}
-    $p fields {a b c d}
-    $p import $m
-} -body {
-    # decl: validate {clauses output}
-    $p validate {
-        F(c) foobar {1 2 3 4}
-    } [file join [::tcltest::configure -tmpdir] validate-output]
-    ::tcltest::viewFile validate-output
-} -cleanup {
-    $p destroy
-    unset m
-} -match glob -result {ogiltig valideringsoperation "foobar"*} -returnCodes error
-
-
-::tcltest::test validator_one-of-1.0 {one-of:} -constraints {validator_oneOf} -setup {
-} -body {
-    # decl: one-of {val validation}
-    validator one-of 99 {98 99 100}
-} -cleanup {
-} -result {}
-
-
-::tcltest::test validator_one-of-1.1 {one-of:} -constraints {validator_oneOf} -setup {
-} -body {
-    # decl: one-of {val validation}
-    validator one-of 97 {98 99 100}
-} -cleanup {
-} -match glob -result {*r inte en av {98 99 100}}
-
-
-::tcltest::test validator_not-one-of-1.0 {not-one-of:} -constraints {validator_notOneOf} -setup {
-} -body {
-    # decl: not-one-of {val validation}
-    validator not-one-of a {b c d}
-} -cleanup {
-} -result {}
-
-
-::tcltest::test validator_matches-1.0 {matches:} -constraints {validator_matches} -setup {
-} -body {
-    # decl: matches {val validation}
-    validator matches foo {f([aou])\1}
-} -cleanup {
-} -result {}
-
-
-::tcltest::test validator_matches-or-is-empty-1.0 {matches-or-is-empty:} -constraints {validator_matchesOrIsEmpty} -setup {
-} -body {
-    # decl: matches-or-is-empty {val validation}
-    validator matches-or-is-empty xyz {...}
-} -cleanup {
-} -result {}
-
-
-::tcltest::test validator_matches-or-is-empty-1.1 {matches-or-is-empty:} -constraints {validator_matchesOrIsEmpty} -setup {
-} -body {
-    # decl: matches-or-is-empty {val validation}
-    validator matches-or-is-empty {} {...}
-} -cleanup {
-} -result {}
-
-
-::tcltest::test validator_belongs-to-1.0 {belongs-to:} -constraints {validator_belongsTo} -setup {
-    proc ::csvops::convert-foobar val {return xyz}
-} -body {
-    # decl: belongs-to {val validation}
-} -cleanup {
-    validator belongs-to x foobar
-} -result {}
-
 set STARKITS H:/starkits
 set SANDBOX H:/code
 if {![file exists $STARKITS]} {
@@ -928,117 +757,7 @@ if {![file exists $STARKITS]} {
     set SANDBOX [file normalize [file join ~ code]]
 }
 
-::tcltest::test logging_addMessage-1.0 {addMessage:} -constraints {logging_addMessage} -setup {
-    ::tcltest::makeFile "0;foo\n1;snarf\n2;blue" a.csv
-    ::csvops::log::reset
-    set ::csvops::log::running 1
-    set r [Reader new -fields {foo bar}]
-} -body {
-    $r read [file join [::tcltest::configure -tmpdir] a.csv]
-    set ::csvops::log::messages
-} -cleanup {
-    $r destroy
-} -match glob -result [format {Reader ::oo::Obj* skapad
-Reader ::oo::Obj* l*ser in "%s/csvops/test/temp/a.csv"
-Reader ::oo::Obj* 3 rader, 21 bytear inl*sta
-} $SANDBOX]
-
-
 set options(-separator) \;
-
-
-::tcltest::test logging_addMessage-1.1 {addMessage:} -constraints {logging_addMessage} -setup {
-    ::tcltest::makeFile {} w.csv
-    set r [Reader new -fields {foo bar}]
-    set w [Writer new -fields {foo bar}]
-    ::tcltest::makeFile "0;foo\n1;snarf\n2;blue" a.csv
-    ::csvops::log::reset
-    set ::csvops::log::running 1
-} -body {
-    $r read [file join [::tcltest::configure -tmpdir] a.csv]
-    $r get { $w put }
-    $w write [file join [::tcltest::configure -tmpdir] w.csv]
-    set ::csvops::log::messages
-} -cleanup {
-    $r destroy
-    $w destroy
-} -match glob -result [format {Reader ::oo::Obj* l*ser in "%1$s/csvops/test/temp/a.csv"
-Reader ::oo::Obj* 3 rader, 21 bytear inl*sta
-Writer ::oo::Obj* skriver filen "%1$s/csvops/test/temp/w.csv"
-} $SANDBOX]
-
-
-::tcltest::test logging_addMessage-1.2 {} -constraints {logging_addMessage} -setup {
-    ::tcltest::makeFile {} foo.csv
-    ::csvops::log::reset
-    set ::csvops::log::running 1
-} -body {
-    set t [Presentation new Foobar 1 2 3]
-    $t addRow a 45 89 23
-    $t addRow b 89 37 82
-    set w [PresentationWriter new]
-    $w write [file join [tcltest::temporaryDirectory] foo.csv] $t
-    set ::csvops::log::messages
-} -cleanup {
-    $t destroy
-} -match glob -result [format {Presentation ::oo::Obj* skapad
-PresentationWriter ::oo::Obj* skapad
-PresentationWriter ::oo::Obj* skriver filen "%s/csvops/test/temp/foo.csv" med formatet CSV
-} $SANDBOX]
-
-
-::tcltest::test logging_addMessage-1.3 {} -constraints {logging_addMessage} -setup {
-    ::tcltest::makeFile {} foo.html
-    ::csvops::log::reset
-    set ::csvops::log::running 1
-} -body {
-    set t [Presentation new Foobar 1 2 3]
-    $t addRow a 45 89 23
-    $t addRow b 89 37 82
-    set w [PresentationWriter new]
-    $w write [file join [tcltest::temporaryDirectory] foo.html] $t
-    set ::csvops::log::messages
-} -cleanup {
-    $t destroy
-} -match glob -result [format {Presentation ::oo::Obj* skapad
-PresentationWriter ::oo::Obj* skapad
-PresentationWriter ::oo::Obj* skriver filen "%s/csvops/test/temp/foo.html" med formatet HTML
-} $SANDBOX]
-
-
-::tcltest::test logging_setLabel-1.0 {setLabel:} -constraints {logging_setLabel} -setup {
-    ::tcltest::makeFile "0;foo\n1;snarf\n2;blue" a.csv
-    ::csvops::log::reset
-    set ::csvops::log::running 1
-    set r [Reader new -fields {foo bar}]
-} -body {
-    $r read [file join [::tcltest::configure -tmpdir] a.csv]
-    $r get {}
-    lassign $::csvops::log::objects key lbl
-    set tag [dict get $::csvops::log::labels $key]
-    list $key $lbl $tag
-} -cleanup {
-    $r destroy
-} -match glob -result {{Reader ::oo::Obj*} {bearbetar rad 3} loglbl1}
-
-
-::tcltest::test logging_setLabel-1.1 {setLabel:} -constraints {logging_setLabel} -setup {
-    set r [Reader new -fields {foo bar}]
-    set w [Writer new -fields {foo bar}]
-    ::tcltest::makeFile "0;foo\n1;snarf\n2;blue" a.csv
-    ::csvops::log::reset
-    set ::csvops::log::running 1
-    ::tcltest::makeFile {} w.csv
-} -body {
-    $r read [file join [::tcltest::configure -tmpdir] a.csv]
-    $r get { $w put }
-    lassign [dict filter $::csvops::log::objects key Writer*] key lbl
-    set tag [dict get $::csvops::log::labels $key]
-    list $key $lbl $tag
-} -cleanup {
-    $r destroy
-    $w destroy
-} -match glob -result {{Writer ::oo::Obj*} {lagrar rad 3} loglbl2}
 
 
 if no {
@@ -1051,10 +770,12 @@ foreach file [glob -dir [file join $starkit::topdir _src] *.tcl] {
 
 ::tcltest::test result_intersect-1.0 {result_intersect:} -constraints {result_intersect} -setup {
     set r [DB new]
-    $r makeTable t1 {a b c} {{1 2 3} {2 3 1} {3 1 2} {3 1 2}}
-    $r makeTable t2 {a b c} {{4 5 6} {5 6 4} {4 5 6}}
+    $r create t1 a b c
+    $r fillTable t1 {1 2 3} {2 3 1} {3 1 2} {3 1 2}
+    $r create t2 a b c
+    $r fillTable t2 {4 5 6} {5 6 4} {4 5 6}
 } -body {
-    dict values [$r eval2 {SELECT * FROM t1 INTERSECT SELECT * FROM t2}]
+    dict values [$r dict {SELECT * FROM t1 INTERSECT SELECT * FROM t2}]
 } -cleanup {
     $r destroy
 } -result {}
@@ -1062,10 +783,12 @@ foreach file [glob -dir [file join $starkit::topdir _src] *.tcl] {
 
 ::tcltest::test result_intersect-1.1 {result_intersect:} -constraints {result_intersect} -setup {
     set r [DB new]
-    $r makeTable t1 {a b c} {{1 2 3} {2 3 1} {3 1 2} {3 1 2}}
-    $r makeTable t2 {a b c} {{2 3 1} {2 3 1} {3 2 1}}
+    $r create t1 a b c
+    $r fillTable t1 {1 2 3} {2 3 1} {3 1 2} {3 1 2}
+    $r create t2 a b c
+    $r fillTable t2 {2 3 1} {2 3 1} {3 2 1}
 } -body {
-    dict values [$r eval2 {SELECT * FROM t1 INTERSECT SELECT * FROM t2}]
+    dict values [$r dict {SELECT * FROM t1 INTERSECT SELECT * FROM t2}]
 } -cleanup {
     $r destroy
 } -result {{a b c} {2 3 1}}
@@ -1073,10 +796,12 @@ foreach file [glob -dir [file join $starkit::topdir _src] *.tcl] {
 
 ::tcltest::test result_except-1.0 {result_except:} -constraints {result_except} -setup {
     set r [DB new]
-    $r makeTable t1 {a b c} {{1 2 3} {2 3 1} {3 1 2} {3 1 2}}
-    $r makeTable t2 {a b c} {{4 5 6} {5 6 4} {4 5 6}}
+    $r create t1 a b c
+    $r fillTable t1 {1 2 3} {2 3 1} {3 1 2} {3 1 2}
+    $r create t2 a b c
+    $r fillTable t2 {4 5 6} {5 6 4} {4 5 6}
 } -body {
-    dict values [$r eval2 {SELECT * FROM t1 EXCEPT SELECT * FROM t2}]
+    dict values [$r dict {SELECT * FROM t1 EXCEPT SELECT * FROM t2}]
 } -cleanup {
     $r destroy
 } -result {{a b c} {1 2 3} {2 3 1} {3 1 2}}
@@ -1084,10 +809,12 @@ foreach file [glob -dir [file join $starkit::topdir _src] *.tcl] {
 
 ::tcltest::test result_except-1.1 {result_except:} -constraints {result_except} -setup {
     set r [DB new]
-    $r makeTable t1 {a b c} {{1 2 3} {2 3 1} {3 1 2} {3 1 2}}
-    $r makeTable t2 {a b c} {{2 3 1} {2 3 1} {3 2 1}}
+    $r create t1 a b c
+    $r fillTable t1 {1 2 3} {2 3 1} {3 1 2} {3 1 2}
+    $r create t2 a b c
+    $r fillTable t2 {2 3 1} {2 3 1} {3 2 1}
 } -body {
-    dict values [$r eval2 {SELECT * FROM t1 EXCEPT SELECT * FROM t2}]
+    dict values [$r dict {SELECT * FROM t1 EXCEPT SELECT * FROM t2}]
 } -cleanup {
     $r destroy
 } -result {{a b c} {1 2 3} {3 1 2}}
@@ -1095,9 +822,10 @@ foreach file [glob -dir [file join $starkit::topdir _src] *.tcl] {
 
 ::tcltest::test result_range-1.0 {result_range:} -constraints {result_range} -setup {
     set r [DB new]
-    $r makeTable t1 {a b} {{1 2} {3 4} {5 6} {7 8} {9 0} {2 1} {4 3} {6 5} {8 7} {0 9}}
+    $r create t1 a b
+    $r fillTable t1 {1 2} {3 4} {5 6} {7 8} {9 0} {2 1} {4 3} {6 5} {8 7} {0 9}
 } -body {
-    lrange [dict values [$r eval2 {SELECT * FROM t1 LIMIT 3}]] 1 end
+    lrange [dict values [$r dict {SELECT * FROM t1 LIMIT 3}]] 1 end
 } -cleanup {
     $r destroy
 } -result {{1 2} {3 4} {5 6}}
@@ -1105,9 +833,10 @@ foreach file [glob -dir [file join $starkit::topdir _src] *.tcl] {
 
 ::tcltest::test result_range-1.1 {result_range:} -constraints {result_range} -setup {
     set r [DB new]
-    $r makeTable t1 {a b} {{1 2} {3 4} {5 6} {7 8} {9 0} {2 1} {4 3} {6 5} {8 7} {0 9}}
+    $r create t1 a b
+    $r fillTable t1 {1 2} {3 4} {5 6} {7 8} {9 0} {2 1} {4 3} {6 5} {8 7} {0 9}
 } -body {
-    lrange [dict values [$r eval2 {SELECT * FROM t1 LIMIT 4, 4}]] 1 end
+    lrange [dict values [$r dict {SELECT * FROM t1 LIMIT 4, 4}]] 1 end
 } -cleanup {
     $r destroy
 } -result {{9 0} {2 1} {4 3} {6 5}}
@@ -1115,29 +844,35 @@ foreach file [glob -dir [file join $starkit::topdir _src] *.tcl] {
 
 ::tcltest::test result_range-1.2 {result_range:} -constraints {result_range} -setup {
     set r [DB new]
-    $r makeTable t1 {a b} {{1 2} {3 4} {5 6} {7 8} {9 0} {2 1} {4 3} {6 5} {8 7} {0 9}}
+    $r create t1 a b
+    $r fillTable t1 {1 2} {3 4} {5 6} {7 8} {9 0} {2 1} {4 3} {6 5} {8 7} {0 9}
 } -body {
-    lrange [dict values [$r eval2 {SELECT * FROM t1 LIMIT 2, 99999999}]] 1 end
+    lrange [dict values [$r dict {SELECT * FROM t1 LIMIT 2, 99999999}]] 1 end
 } -cleanup {
     $r destroy
 } -result {{5 6} {7 8} {9 0} {2 1} {4 3} {6 5} {8 7} {0 9}}
 
 
+    ::tcltest::makeFile "2;a\n11;a\n1;b\n2;b\n11;A\n1;A" a.csv
+
 ::tcltest::test result_order_by-1.0 {result_order_by: (force text sorting)} -constraints {result_order_by} -setup {
     set r [DB new]
-    $r makeTable t1 {{a text} b} {{2 a} {11 a} {1 b} {2 b} {11 A} {1 A}}
+    $r create t1 {a text} b
+    $r loadTable t1 [file join [::tcltest::configure -tmpdir] a.csv]
 } -body {
-    dict values [$r eval2 {SELECT * FROM t1 ORDER BY b COLLATE NOCASE ASC, a}]
+    dict values [$r dict {SELECT * FROM t1 ORDER BY b COLLATE NOCASE ASC, a}]
 } -cleanup {
     $r destroy
+    log::lvSuppressLE i 1
 } -result {{a b} {1 A} {11 a} {11 A} {2 a} {1 b} {2 b}}
 
 
 ::tcltest::test result_order_by-1.1 {result_order_by:} -constraints {result_order_by} -setup {
     set r [DB new]
-    $r makeTable t1 {a b} {{2 a} {11 a} {1 b} {2 b} {11 A} {1 A}}
+    $r create t1 a b
+    $r loadTable t1 [file join [::tcltest::configure -tmpdir] a.csv]
 } -body {
-    dict values [$r eval2 {SELECT * FROM t1 ORDER BY b COLLATE NOCASE ASC, a}]
+    dict values [$r dict {SELECT * FROM t1 ORDER BY b COLLATE NOCASE ASC, a}]
 } -cleanup {
     $r destroy
 } -result {{a b} {1 A} {2 a} {11 a} {11 A} {1 b} {2 b}}
@@ -1145,9 +880,10 @@ foreach file [glob -dir [file join $starkit::topdir _src] *.tcl] {
 
 ::tcltest::test result_order_by-1.2 {result_order_by: (force text sorting)} -constraints {result_order_by} -setup {
     set r [DB new]
-    $r makeTable t1 {{a text} b} {{2 a} {11 a} {1 b} {2 b} {11 A} {1 A}}
+    $r create t1 {a text} b
+    $r loadTable t1 [file join [::tcltest::configure -tmpdir] a.csv]
 } -body {
-    dict values [$r eval2 {SELECT * FROM t1 ORDER BY b, a}]
+    dict values [$r dict {SELECT * FROM t1 ORDER BY b, a}]
 } -cleanup {
     $r destroy
 } -result {{a b} {1 A} {11 A} {11 a} {2 a} {1 b} {2 b}}
@@ -1155,19 +891,21 @@ foreach file [glob -dir [file join $starkit::topdir _src] *.tcl] {
 
 ::tcltest::test result_order_by-1.3 {result_order_by:} -constraints {result_order_by} -setup {
     set r [DB new]
-    $r makeTable t1 {a b} {{2 a} {11 a} {1 b} {2 b} {11 A} {1 A}}
+    $r create t1 a b
+    $r loadTable t1 [file join [::tcltest::configure -tmpdir] a.csv]
 } -body {
-    dict values [$r eval2 {SELECT * FROM t1 ORDER BY b, a}]
+    dict values [$r dict {SELECT * FROM t1 ORDER BY b, a}]
 } -cleanup {
     $r destroy
 } -result {{a b} {1 A} {11 A} {2 a} {11 a} {1 b} {2 b}}
 
 
-::tcltest::test view_select-1.0 {view_select:} -constraints {view_select} -setup {
+::tcltest::test result_select-1.0 {result_select:} -constraints {result_select} -setup {
     set r [DB new]
-    $r makeTable t1 {a b c d} {{1 2 3 4} {2 3 4 1} {3 4 1 2} {4 1 2 3}}
+    $r create t1 a b c d
+    $r fillTable t1 {1 2 3 4} {2 3 4 1} {3 4 1 2} {4 1 2 3}
 } -body {
-    dict values [$r eval2 {SELECT a, b FROM t1}]
+    dict values [$r select -dict t1 a b]
 } -cleanup {
     $r destroy
 } -result {{a b} {1 2} {2 3} {3 4} {4 1}}
@@ -1175,20 +913,23 @@ foreach file [glob -dir [file join $starkit::topdir _src] *.tcl] {
 
 ::tcltest::test result_select-1.0 {result_select: -> copy into} -constraints {result_select} -setup {
     set r [DB new]
-    $r makeTable t1 {a b c d} {{1 2 3 4} {2 3 4 1} {3 4 1 2} {4 1 2 3}}
-    $r makeTable t2 {a b} {}
+    $r create t1 a b c d
+    $r fillTable t1 {1 2 3 4} {2 3 4 1} {3 4 1 2} {4 1 2 3}
+    $r create t2 a b
 } -body {
-    lrange [dict values [$r eval2 {INSERT INTO t2 SELECT a, b FROM t1 ; SELECT * FROM t2}]] 1 end
+    $r eval {INSERT INTO t2 SELECT a, b FROM t1}
+    dict values [$r select -dict t2]
 } -cleanup {
     $r destroy
-} -result {{1 2} {2 3} {3 4} {4 1}}
+} -result {{a b} {1 2} {2 3} {3 4} {4 1}}
 
 
 ::tcltest::test result_select-1.1 {result_select:} -constraints {result_select} -setup {
 } -body {
     set r [DB new]
-    $r makeTable t1 {a b c d} {{1 2 3 4} {2 3 4 1} {3 4 1 2} {4 1 2 3}}
-    lrange [dict values [$r eval2 {SELECT a, b FROM t1 WHERE (a % 2 == 1)}]] 1 end
+    $r create t1 a b c d
+    $r fillTable t1 {1 2 3 4} {2 3 4 1} {3 4 1 2} {4 1 2 3}
+    lrange [dict values [$r dict {SELECT a, b FROM t1 WHERE (a % 2 == 1)}]] 1 end
 } -cleanup {
     $r destroy
 } -result {{1 2} {3 4}}
@@ -1201,11 +942,13 @@ foreach file [glob -dir [file join $starkit::topdir _src] *.tcl] {
     ::tcltest::makeFile "0;foo\n1;snarf\n2;blue" a.csv
     ::tcltest::makeFile "0;bagel\n1;snatz\n3;driver" b.csv
     set r [DB new]
-    $r makeTable t1 {foo bar} [$r read [file join [::tcltest::configure -tmpdir] a.csv]]
-    $r makeTable t2 {foo bar} [$r read [file join [::tcltest::configure -tmpdir] b.csv]]
+    $r create t1 foo bar
+    $r loadTable t1 [file join [::tcltest::configure -tmpdir] a.csv]
+    $r create t2 foo bar
+    $r loadTable t2 [file join [::tcltest::configure -tmpdir] b.csv]
     ::tcltest::makeFile {} output.csv
 } -body {
-    $r write t1 [file join [::tcltest::configure -tmpdir] output.csv]
+    $r dumpTable t1 [file join [::tcltest::configure -tmpdir] output.csv]
     ::tcltest::viewFile output.csv
 } -cleanup {
     $r destroy
@@ -1213,6 +956,71 @@ foreach file [glob -dir [file join $starkit::topdir _src] *.tcl] {
 0;foo
 1;snarf
 2;blue}
+
+
+::tcltest::test validator_one-of-1.0 {one-of:} -constraints {validator_oneOf} -setup {
+    set r [DB new]
+    $r create t1 a b c d
+    $r fillTable t1 {1 2 3 4} {2 3 4 1} {3 4 1 2} {4 1 2 3}
+} -body {
+    set res {}
+    $r eval {SELECT * FROM t1} {
+        if {$c ni {1 3}} {
+            lappend res $c
+        }
+    }
+    set res
+} -cleanup {
+    $r destroy
+} -result {4 2}
+
+
+::tcltest::test validator_one-of-1.0 {one-of:} -constraints {validator_oneOf} -setup {
+    set r [DB new]
+    $r create t1 a b c d
+    $r fillTable t1 {1 2 3 4} {2 3 4 1} {3 4 1 2} {4 1 2 3}
+} -body {
+    $r dict -values {SELECT * FROM t1 WHERE c NOT IN (1, 3)}
+} -cleanup {
+    $r destroy
+} -result {{2 3 4 1} {4 1 2 3}}
+
+
+::tcltest::test validator_matches-1.0 {matches:} -constraints {validator_matches} -setup {
+    set r [DB new]
+    $r create t1 a b
+    $r fillTable t1 {'fio' 'bar'} {'foo' 'bar'} {'fie' 'baz'} {'foo' 'qux'}
+} -body {
+    $r dict -values {SELECT * FROM t1 WHERE a LIKE 'f_o'}
+} -cleanup {
+    $r destroy
+} -result {{fio bar} {foo bar} {foo qux}}
+
+
+::tcltest::test validator_validate-1.0 {validate:} -constraints {validator_validate} -setup {
+    set r [DB new]
+    $r create t1 a b
+    $r fillTable t1 {'fio' 'bar'} {'foo' 'bar'} {'fie' 'baz'} {'foo' 'qux'}
+    $r function validate {regexp {f([aou])\1}}
+} -body {
+    $r dict -values {SELECT * FROM t1 WHERE validate(a)}
+} -cleanup {
+    $r destroy
+} -result {{foo bar} {foo qux}}
+
+
+::tcltest::test validator_validate-1.1 {validate:} -constraints {validator_validate} -setup {
+    set r [DB new]
+    $r create t1 a b
+    $r fillTable t1 {'fio' 'bar'} {'foo' 'bar'} {'fie' 'baz'} {'foo' 'qux'}
+    $r function validate {apply {{a b} {expr {
+        [regexp {f([aou])\1} $a] && [string match b* $b]
+    }}}}
+} -body {
+    $r dict -values {SELECT * FROM t1 WHERE validate(a, b)}
+} -cleanup {
+    $r destroy
+} -result {{foo bar}}
 
 
 ::tcltest::cleanupTests

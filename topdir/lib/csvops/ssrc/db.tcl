@@ -1,12 +1,10 @@
 
-if {[info commands ::DB] ne {}} {
-    return
-}
-
 package require csv
+package require sqlite3
+package require tdom
 
 oo::class create DB {
-    variable options
+    variable options tally
 
     constructor {{filename :memory:}} {
         sqlite3 [self namespace]::dbcmd $filename
@@ -18,100 +16,59 @@ oo::class create DB {
         [self namespace]::dbcmd close
     }
 
-    method select {tableid args} {
-        if {[llength $args] < 1} {
-            set columns *
-        } else {
-            set columns [join $args ,]
-        }
-        dbcmd eval [format {SELECT %s FROM %s} $columns $tableid]
-    }
+    forward eval dbcmd eval
+    forward function dbcmd function
 
-    method insert {tableid args} {
-        if {[llength $args] eq 1} {
-            set columns {}
-            set values ([join [my ImportValues [lindex $args 0]] ,])
-        } elseif {[llength $args] eq 2} {
-            set columns ([join [lindex $args 0] ,])
-            set values ([join [my ImportValues [lindex $args 1]] ,])
-        } else {
-            return -code error [mc {wrong number of arguments, should be "insert tableid ?columns? values"}]
-        }
-        dbcmd eval [format {INSERT INTO %s %s VALUES %s} $tableid $columns $values]
-    }
+    # SQL shortcuts: create, select, insert. 
 
-    method exists args {
-        # TODO
-    }
-    
     method create {tableid args} {
-        # TODO add test
+        # Create a table given a table name and a sequence of column
+        # specifications. Does nothing if no column specifications are given.
         if {[llength $args] > 0} {
             set columns [join $args ,]
             dbcmd eval [format {CREATE TABLE %s (%s)} $tableid $columns]
         }
     }
 
-    method toDOM doc {
-        # TODO transplanted from presentation, needs rewrite
-        set tnode [$doc createElement table]
-
-        dom createNodeCmd elementNode caption
-        dom createNodeCmd elementNode tr
-        dom createNodeCmd elementNode th
-        dom createNodeCmd elementNode td
-        dom createNodeCmd textNode t
-
-        $tnode appendFromScript {caption {t [my getLabel]}}
-        for {set i 0} {$i < [$m rows]} {incr i} {
-            set vals [lassign [$m get row $i] rowkey]
-            if {$i == 0} {
-                set rowkey {}
-                set nc th
-            } else {
-                set nc td
-            }
-            $tnode appendFromScript {
-                tr {
-                    th {t $rowkey}
-                    foreach val $vals {
-                        $nc {t $val}
-                    }
-                }
-            }
-        }
-
-        return $tnode
-    }
-
-    method WriteHTML {filename args} {
-        # TODO transplanted from presentationwriter, needs rewrite
-        set doc [dom createDocument html]
-        set root [$doc documentElement]
-        $root appendFromList [format {
-            head {} {
-                {link {rel stylesheet type text/css href csvops.css} {}}
-                {title {} {{#text {%s}}}}
-            }
-        } [mc {output created by csvops}]]
-        $root appendFromList {body {} {}}
-        set body [$root lastChild]
-        foreach tbl $args {
-            $body appendChild [$tbl toDOM $doc]
-        }
-        ::fileutil::writeFile $filename [$doc asHTML]
-        $doc delete
-    }
-
-    method eval2 args {
-        if {[llength $args] eq 2} {
-            lassign $args varName sql
-            upvar 1 $varName res
-        } elseif {[llength $args] eq 1} {
-            lassign $args sql
+    method select args {
+        # Select columns from a table given a table name and a sequence of
+        # column names. * is used if no column names are given. The -dict
+        # option sets the return value to be a result dict, otherwise the
+        # return value will be a result set.
+        if {[lindex $args 0] eq "-dict"} {
+            set columns [join [lassign $args - tableid] ,]
+            set fn {my dict}
         } else {
-            return -code error [mc {wrong number of arguments to eval2}]
+            set columns [join [lassign $args tableid] ,]
+            set fn {dbcmd eval}
         }
+        if {$columns eq {}} {
+            set columns *
+        }
+        {*}$fn [format {SELECT %s FROM %s} $columns $tableid]
+    }
+
+    method insert {tableid args} {
+        log::logMsg [info level 0]
+        #error [info level 0]
+        # Insert a row into a table given table name, optionally a list of
+        # column names, and a list of values.
+        set argc [llength $args]
+        lassign [lmap arg [lreverse $args] {join $arg ,}] values columns
+        switch $argc {
+            1 {
+                log::logMsg [list dbcmd eval [format {INSERT INTO %s VALUES (%s)} $tableid $values]]
+                dbcmd eval [format {INSERT INTO %s VALUES (%s)} $tableid $values]
+            }
+            2 {dbcmd eval [format {INSERT INTO %s (%s) VALUES (%s)} $tableid $columns $values]}
+            default {
+                return -code error [mc {wrong number of arguments, should be "insert tableid ?columns? values"}]
+            }
+        }
+    }
+
+    method dict args {
+        set sql [lindex $args end]
         set ln 0
         set res {}
         dbcmd eval $sql ROW {
@@ -121,129 +78,161 @@ oo::class create DB {
             }
             incr ln
         }
-        return $res
-    }
-
-    method eval args {
-        if yes {
-        uplevel 1 [list [self namespace]::dbcmd eval {*}$args]
-        } elseif no {
-        tailcall [self namespace]::dbcmd eval {*}$args
+        if {[lindex $args 0] eq "-values"} {
+            return [lrange [dict values $res] 1 end]
         } else {
-        }
-    }
-
-    method makeTable {tableid fields rows} {
-        my CreateTable $tableid $fields
-        foreach row $rows {
-            my InsertRow $tableid [my ImportValues $row]
+            return $res
         }
     }
 
     method readTable {tableid filename} {
+        # Create and populate a table from a file.
         try {
             open $filename
         } on ok f {
             set rows [lassign [my GetRows $f] fields]
-            my makeTable $tableid $fields $rows
+            my create $tableid {*}$fields
+            my fillTable $tableid {*}$rows
             return $fields
         } finally {
             catch {chan close $f}
         }
     }
 
-    method read filename {
+    method loadTable {tableid filename} {
+        # Populate an existing table from a file.
         try {
             open $filename
         } on ok f {
-            my GetRows $f
+            my fillTable $tableid {*}[my GetRows $f]
         } finally {
             catch {chan close $f}
         }
     }
 
-    method read1 filename {
-        try {
-            open $filename
-        } on ok f {
-            gets $f
-            my GetRows $f
-        } finally {
-            catch {chan close $f}
+    method fillTable {tableid args} {
+        # Populate an existing table from a sequence of tuples.
+        foreach row $args {
+            my insert $tableid $row
         }
     }
 
-    method write {tableid filename} {
+    method dumpTable args {
+        set o [OptionHandler new]
+        $o option -values flag 1
+        $o option -decimal default ,
+        $o option -oseparator
+        variable opts
+        set opts(-oseparator) $options(-oseparator)
+        lassign [$o extract [self namespace]::opts {*}$args] tableid filename 
         try {
             open $filename w
         } on ok f {
-            dbcmd eval "SELECT * FROM $tableid" F {
-                if {![info exists columnNames]} {
-                    set columnNames $F(*)
-                    puts $f [::csv::join $columnNames $options(-oseparator)]
-                }
-                set line {}
-                foreach col $columnNames {
-                    lappend line $F($col)
-                }
-                puts $f [::csv::join $line $options(-oseparator)]
+            set t [my dict [format {SELECT * FROM %s} $tableid]]
+            set rows [lassign [dict values $t] fields]
+            if {!$opts(-values)} {
+                puts $f [::csv::join $fields $opts(-oseparator)]
             }
+            puts -nonewline $f [::csv::joinlist [my OutputFilterList $rows decimal $opts(-decimal)] $opts(-oseparator)]
         } finally {
             catch {chan close $f}
+            $o destroy
         }
     }
 
-    method CreateTable {tableid fields} {
-        set types [lmap field $fields {
-            if {[llength $field] > 1} {
-                lindex $field end
+    method OutputFilterList {rows args} {
+        set opts {decimal ,}
+        set opts [dict merge $opts $args]
+        lmap row $rows {
+            my OutputFilterRow $row {*}$opts
+        }
+    }
+
+    method OutputFilterRow {row args} {
+        set opts {decimal ,}
+        set opts [dict merge $opts $args]
+        lmap val $row {
+            if {[string is double -strict $val]} {
+                string map [list . [dict get $opts decimal]] $val
             } else {
-                format text
+                string map {'' '} $val
             }
-        }]
-        [self namespace]::dbcmd eval "CREATE TABLE $tableid ([join $fields ,])"
-        return $types
+        }
     }
 
-    method InsertRow {tableid values} {
-        [self namespace]::dbcmd eval "INSERT INTO $tableid VALUES([join $values ,])"
-    }
-
-    method ImportValues values {
-        lmap value $values {
-            set flval [string map {, .} $value]
-            if {[string is entier -strict $value]} {
-                set value
+    method InputFilterRow row {
+        lmap val $row {
+            set flval [string map {, .} $val]
+            if {[regexp {^0\d+$} $val]} {
+                # kludge for numeric constants beginning with 0
+                format '%s' $val
+            } elseif {[string is entier -strict $val]} {
+                set val
             } elseif {[string is double -strict $flval]} {
                 set flval
             } else {
-                format '%s' [string map {' ''} $value]
-            }
-        }
-    }
-
-    method ExportValues values {
-        lmap value $values {
-            if {[string is double -strict $value} {
-                string map {. ,} $value
-            } else {
-                set value
+                format '%s' [string map {' ''} $val]
             }
         }
     }
 
     method GetRows channel {
-        if no {
-        # TODO kludge, this option should be set
-        if {![info exists options(-separator)]} {
-            set options(-separator) \;
-        }
-        }
         set result {}
         while {[gets $channel line] >= 0} {
-            lappend result [::csv::split $line $options(-separator)]
+            lappend result [my InputFilterRow [::csv::split $line $options(-separator)]]
         }
         return $result
+    }
+
+    method tally {{key {}}} {
+        if {$key eq {}} {
+            set tally {}
+        } else {
+            dict incr tally $key
+        }
+    }
+
+    method insertTally tableid {
+        my insert $tableid [dict values $tally]
+        set tally {}
+    }
+
+    method dumpTally {} {
+        set tally
+    }
+
+    method html {tableid caption} {
+        set doc [dom createDocument table]
+        set root [$doc documentElement]
+        set dict [my dict [format {SELECT * FROM %s} $tableid]]
+
+        dom createNodeCmd elementNode caption
+        dom createNodeCmd elementNode tr
+        dom createNodeCmd elementNode th
+        dom createNodeCmd elementNode td
+        dom createNodeCmd textNode t
+
+        $root appendFromScript {caption {t $caption}}
+        dict for {key val} $dict {
+            $root appendFromScript {
+                tr {
+                    if {$key eq "*"} {
+                        th {t {}}
+                        foreach v $val {
+                            th {t $v}
+                        }
+                    } else {
+                        th {t $key}
+                        foreach v $val {
+                            td {t $v}
+                        }
+                    }
+                }
+            }
+        }
+        set res [$doc asHTML]
+        $doc delete
+        return $res
     }
 
 }
