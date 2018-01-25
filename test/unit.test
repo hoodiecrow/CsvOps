@@ -2,6 +2,9 @@ package require tcltest
 
 ::tcltest::configure {*}$argv
 
+# TODO on loan, remove
+file copy -force [file join [::tcltest::configure -testdir] eval2.csv] [::tcltest::configure -tmpdir]
+
 ::tcltest::testConstraint skip 0
 ::tcltest::testConstraint noskip 1
 foreach unit {
@@ -466,7 +469,6 @@ namespace import ::msgcat::mc
 ::tcltest::test handle_empties-1.0 {getColumnValues: skip nulls} -constraints {noskip handle_empties} -setup {
     set p [DB new]
     $p create t1 a b c d
-    log::lvSuppressLE i 0
     $p fillTable t1 {1 2 3 4} {5 6 '' 8}
 } -body {
     lmap val [$p eval {SELECT c FROM t1}] {if {$val ne {}} {set val} continue}

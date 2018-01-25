@@ -210,49 +210,14 @@ set FOO_CO [file join [::tcltest::configure -tmpdir] foo.co]
     log::lvSuppressLE i 0
     ::tcltest::makeFile {} foobar.csv
     ::tcltest::makeFile {
-        if no {
-        Reader create s -cols :2
-        set w [Writer new]
-        $w fields [s fields {nr msg a}]
-        s read eval2.csv
-        s get {
-            if {[s unique nr]} {
-                $w put
-            }
-        }
-        $w write foobar.csv
-        }
-        if no {
-        s create t2 nr
-        s eval {INSERT INTO t2 SELECT DISTINCT a FROM t1}
-        s create t3 nr msg a
-        s eval {INSERT INTO t3 SELECT t2.nr, t1.b, t1.c FROM t2 LEFT JOIN t1 WHERE t2.nr==t1.a}
-        s dumpTable -values -decimal . -oseparator , t3 foobar.csv
-        }
         DB create s
         s create t1 a b c d e
         s loadTable t1 eval2.csv
-        s create t2 nr msg a
         set d [s dict -values {SELECT * FROM t1}]
         set nrs [s eval {SELECT DISTINCT a FROM t1}]
-        if no {
-        error [lmap nr $nrs { lsearch -inline -index 0 $d $nr }]
-        }
-        if no {
-            {023 {EVAL cmd eval in list obj var} 26 45 57.78}
-            {024 {EVAL cmd eval as list} 23 42 54.76}
-            {025 {EVAL cmd eval as string} 53 92 57.61}
-            {026 {EVAL cmd and mixed lists} 3805 11276 33.74}
-            {027 {EVAL list cmd and mixed lists} 3812 11325 33.66}
-            {028 {EVAL list cmd and pure lists} 592 1598 37.05}
-        }
-        s insert t2 {023 {EVAL cmd eval in list obj var} 26 45 57.78}
-        error foo
-
+        s create t2 nr msg a
         foreach nr $nrs {
-            log::logMsg search1=[list lsearch -inline -index 0 $d $nr]
-            log::logMsg search2=[lsearch -inline -index 0 $d $nr]
-            s insert t2 [lsearch -inline -index 0 $d $nr]
+            s insert t2 [lmap item [lrange [lsearch -inline -index 0 $d $nr] 0 2] {format '%s' $item}]
         }
         s dumpTable -values -decimal . -oseparator , t2 foobar.csv
     } foo.co

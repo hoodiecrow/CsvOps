@@ -25,7 +25,6 @@ oo::class create DB {
         # specifications. Does nothing if no column specifications are given.
         if {[llength $args] > 0} {
             set columns [join $args ,]
-            log::logMsg insert:[list dbcmd eval [format {CREATE TABLE %s (%s)} $tableid $columns]]
             dbcmd eval [format {CREATE TABLE %s (%s)} $tableid $columns]
         }
     }
@@ -49,6 +48,7 @@ oo::class create DB {
     }
 
     method insert {tableid args} {
+        log::logMsg [info level 0]
         #error [info level 0]
         # Insert a row into a table given table name, optionally a list of
         # column names, and a list of values.
@@ -56,6 +56,7 @@ oo::class create DB {
         lassign [lmap arg [lreverse $args] {join $arg ,}] values columns
         switch $argc {
             1 {
+                log::logMsg [list dbcmd eval [format {INSERT INTO %s VALUES (%s)} $tableid $values]]
                 dbcmd eval [format {INSERT INTO %s VALUES (%s)} $tableid $values]
             }
             2 {dbcmd eval [format {INSERT INTO %s (%s) VALUES (%s)} $tableid $columns $values]}
