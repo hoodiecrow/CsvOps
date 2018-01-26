@@ -28,7 +28,7 @@ oo::object create csvops
 oo::objdefine csvops {
     variable int data
 
-    method reset {} {
+    method exec args {
         global options
         set o [OptionHandler new]
         $o option -alternate default 0 flag 1
@@ -39,27 +39,33 @@ oo::objdefine csvops {
         $o option -expand default auto
         $o option -fields default {}
 
-        lassign [$o extract ::options {*}$::argv] filename
-        #error [list $::argv $filename]
+        lassign [$o extract ::options {*}$args] filename
         set ::options(-expand) [my -expand-process $::options(-expand)]
+        if {![info exists ::options(-oseparator)]} {
+            set ::options(-oseparator) $::options(-separator)
+        }
 
         lappend init {package require fileutil}
         lappend init [list array set ::options [array get ::options]]
 
         if {[info exists starkit] && $starkit::mode eq "unwrapped"} {
+            error deprecated
             my RunDebug {*}$init {vwait forever}
-        } elseif {$filename eq {}} {
-            ; # just loading
         } else {
-            try {
-                cd [file dirname $filename]
-                ::fileutil::cat $filename
-            } on ok script {
+            try { 
+                if {$filename eq {}} {
+                    format {tkcon show}
+                } else {
+                    cd [file dirname $filename]
+                    ::fileutil::cat $filename
+                }
+            } on ok script { 
                 my RunSafe {*}$init $script
-            } on error {msg opts} {
+            } on error {msg opts} { 
                 dict incr opts -level 1
-                return -options $opts [mc {Load %s} $msg]
-            }
+                # TODO the error message does not change when recasting
+                return -options $opts [mc {Load %s} $msg] 
+            } 
         }
     }
 
@@ -118,6 +124,3 @@ oo::objdefine csvops {
     }
 
 }
-
-csvops reset
-

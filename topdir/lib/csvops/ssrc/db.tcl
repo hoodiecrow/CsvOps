@@ -121,7 +121,7 @@ oo::class create DB {
         set o [OptionHandler new]
         $o option -values flag 1
         $o option -decimal default ,
-        $o option -oseparator
+#        $o option -oseparator
         variable opts
         set opts(-oseparator) $options(-oseparator)
         lassign [$o extract [self namespace]::opts {*}$args] tableid filename 

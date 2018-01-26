@@ -64,6 +64,7 @@ namespace import ::msgcat::mc
 # Interface to sql
 ::tcltest::test sql-methods-1.0 {} -setup {
     ::tcltest::makeFile "foo;bar;baz\n0;foo;ab\n1;snarf;cd\n2;blue;ef" a.csv
+    set ::options(-separator) \;
     set db [DB new]
     $db readTable t1 [file join [::tcltest::configure -tmpdir] a.csv]
     set res {}
@@ -76,6 +77,7 @@ namespace import ::msgcat::mc
 } -cleanup {
     $db destroy
     log::lvSuppressLE i 1
+    array unset ::options
 } -result {{0 foo ab 1 snarf cd 2 blue ef} {0 foo 1 snarf 2 blue}}
 
 # db borrowed from https://www.w3schools.com/sql
@@ -103,6 +105,7 @@ namespace import ::msgcat::mc
 {3;Grandma Kelly's Homestead;Regina Murphy;707 Oxford Rd.;Ann Arbor;48104;USA}] \n] d.csv
 
 ::tcltest::test sql-methods-1.1 {} -setup {
+    set ::options(-separator) \;
     set res {}
 } -body {
     set db [DB new]
@@ -131,9 +134,11 @@ namespace import ::msgcat::mc
 } -cleanup {
     catch {$db destroy}
     log::lvSuppressLE i 1
+    array unset ::options
 } -result {{Germany Mexico Mexico UK Sweden} {Germany Mexico UK Sweden} 4 {2 3} 1 1 1 {2 3 4 5} {1 2 3 5 4} {4 5 2 3 1} {USA Finland Poland Norway}}
 
 ::tcltest::test sql-methods-1.2 {} -setup {
+    set ::options(-separator) \;
     set res {}
 } -body {
     set db [DB new]
@@ -152,9 +157,11 @@ namespace import ::msgcat::mc
     set res
 } -cleanup {
     catch {$db destroy}
+    array unset ::options
 } -result {{* {OrderID CustomerName OrderDate} 1 {10308 {Ana Trujillo Emparedados y helados} 1996-09-18} 2 {10309 {Around the Horn} 1996-09-19}} {* {OrderID CustomerName OrderDate} 1 {10308 {Ana Trujillo Emparedados y helados} 1996-09-18} 2 {10309 {Around the Horn} 1996-09-19} 3 {10310 {} 1996-09-20}}}
 
 ::tcltest::test sql-methods-1.3 {} -setup {
+    set ::options(-separator) \;
     set res {}
 } -body {
     set db [DB new]
@@ -175,6 +182,7 @@ namespace import ::msgcat::mc
     set res
 } -cleanup {
     catch {$db destroy}
+    array unset ::options
 } -result {{{Ann Arbor} Berlin London Luleå {México D.F.} {New Orleans}} {{Ann Arbor} Berlin London London Luleå {México D.F.} {México D.F.} {New Orleans}}}
 
 ::tcltest::test commands_constrain-1.0 {constrain:} -constraints {commands_constrain} -setup {
@@ -282,6 +290,7 @@ namespace import ::msgcat::mc
 
 
 ::tcltest::test row_to_array-1.0 {get:} -constraints {row_to_array} -setup {
+    set ::options(-separator) \;
     ::tcltest::makeFile "1;a;\n2;b;29\n3;c;23" foobar.csv
     set r [DB new]
     $r create t1 foo bar baz
@@ -293,6 +302,7 @@ namespace import ::msgcat::mc
 } -cleanup {
     $r destroy
     unset F
+    array unset ::options
 } -result {1 2}
 
 
@@ -334,6 +344,7 @@ namespace import ::msgcat::mc
 
 
 ::tcltest::test compare_columns-2.0 {getColumn: compare columns for equality} -constraints {compare_columns} -setup {
+    set ::options(-separator) \;
     ::tcltest::makeFile "1;a;\n2;b;29\n3;c;23" foobar.csv
     ::tcltest::makeFile "1;a;83\n2;b;29\n4;c;" bazqux.csv
     set r [DB new]
@@ -350,10 +361,12 @@ namespace import ::msgcat::mc
 } -cleanup {
     $r destroy
     unset C D E F
+    array unset ::options
 } -result {0 1}
 
 
 ::tcltest::test compare_columns-2.1 {getColumn: compare columns for numeric difference} -constraints {compare_columns} -setup {
+    set ::options(-separator) \;
     ::tcltest::makeFile "1;a;\n2;b;29\n3;c;23" foobar.csv
     ::tcltest::makeFile "1;a;83\n2;b;29\n4;c;" bazqux.csv
     set r [DB new]
@@ -370,10 +383,12 @@ namespace import ::msgcat::mc
 } -cleanup {
     $r destroy
     unset C D s1 s2
+    array unset ::options
 } -result 1
 
 
 ::tcltest::test compare_columns-2.2 {getColumn: compare columns for numeric difference, with empty cells} -constraints {compare_columns} -setup {
+    set ::options(-separator) \;
     ::tcltest::makeFile "1;a;\n2;b;29\n3;c;23" foobar.csv
     ::tcltest::makeFile "1;a;83\n2;b;29\n4;c;" bazqux.csv
     set r [DB new]
@@ -388,10 +403,12 @@ namespace import ::msgcat::mc
 } -cleanup {
     $r destroy
     unset s1 s2
+    array unset ::options
 } -result -60
 
 
 ::tcltest::test compare_columns-2.3 {getColumn: compare columns for numeric difference, decimal numbers} -constraints {compare_columns} -setup {
+    set ::options(-separator) \;
     ::tcltest::makeFile "1;a;;1,67\n2;b;29;2,05\n3;c;23;3" foobar.csv
     ::tcltest::makeFile "1;a;83;0,68\n2;b;29;4,12\n4;c;;1,05" bazqux.csv
     set r [DB new]
@@ -406,10 +423,12 @@ namespace import ::msgcat::mc
 } -cleanup {
     $r destroy
     unset s1 s2
+    array unset ::options
 } -result 0.8700000000000001
 
 
 ::tcltest::test compare_columns-2.4 {getColumn: serial comparison for equality -- integer} -constraints {compare_columns} -setup {
+    set ::options(-separator) \;
     ::tcltest::makeFile "1;a;;1,67\n2;b;29;2,05\n3;c;23;3" foobar.csv
     ::tcltest::makeFile "1;a;83;0,68\n2;b;29;4,12\n4;c;;1,05" bazqux.csv
     set r [DB new]
@@ -424,10 +443,12 @@ namespace import ::msgcat::mc
 } -cleanup {
     $r destroy
     unset s1 s2
+    array unset ::options
 } -result {1 1 0}
 
 
 ::tcltest::test compare_columns-2.5 {getColumn: serial comparison for equality -- string} -constraints {compare_columns} -setup {
+    set ::options(-separator) \;
     ::tcltest::makeFile "1;a;;1,67\n2;b;29;2,05\n3;c;23;3" foobar.csv
     ::tcltest::makeFile "1;a;83;0,68\n2;b;29;4,12\n4;c;;1,05" bazqux.csv
     set r [DB new]
@@ -442,10 +463,12 @@ namespace import ::msgcat::mc
 } -cleanup {
     $r destroy
     unset s1 s2
+    array unset ::options
 } -result {1 1 1}
 
 
 ::tcltest::test compare_columns-2.6 {getColumn: serial comparison for equality -- decimal} -constraints {compare_columns} -setup {
+    set ::options(-separator) \;
     ::tcltest::makeFile "1;a;;1,67\n2;b;29;2,05\n3;c;23;1,0500" foobar.csv
     ::tcltest::makeFile "1;a;83;0,68\n2;b;29;4,12\n4;c;;1,05" bazqux.csv
     set r [DB new]
@@ -460,10 +483,12 @@ namespace import ::msgcat::mc
 } -cleanup {
     $r destroy
     unset s1 s2
+    array unset ::options
 } -result {0 0 1}
 
 
 ::tcltest::test handle_empties-1.0 {getColumnValues: skip nulls} -constraints {noskip handle_empties} -setup {
+    set ::options(-separator) \;
     set p [DB new]
     $p create t1 a b c d
     $p fillTable t1 {1 2 3 4} {5 6 '' 8}
@@ -472,10 +497,12 @@ namespace import ::msgcat::mc
 } -cleanup {
     $p destroy
     log::lvSuppressLE i 1
+    array unset ::options
 } -result 3
 
 
 ::tcltest::test handle_empties-1.1 {getColumnValues: set nulls to 0} -constraints {noskip handle_empties} -setup {
+    set ::options(-separator) \;
     ::tcltest::makeFile "1;2;3;4\n5;6;;8" empties.csv
     set p [DB new]
     $p create t1 a b c d
@@ -484,6 +511,7 @@ namespace import ::msgcat::mc
     lmap val [$p eval {SELECT c FROM t1}] {if {$val ne {}} {set val} {expr 0}}
 } -cleanup {
     $p destroy
+    array unset ::options
 } -result {3 0}
 
 
