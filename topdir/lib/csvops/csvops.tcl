@@ -2,10 +2,12 @@ package provide csvops 1.0
 
 package require log
 
+if no {
 # TODO move to main.tcl
 package require conf
 conf msgcat [namespace current]
 conf resource csvops
+}
 
 apply {args {
     set dir [file dirname [info script]]
@@ -38,6 +40,7 @@ oo::objdefine csvops {
         $o option -expand default auto
         $o option -fields default {}
         $o option -safe flag 1
+        $o option -convert-decimal default {read write}
 
         lassign [$o extract ::options {*}$args] filename
         my option-expand ::options -expand auto empty none

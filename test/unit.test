@@ -2,9 +2,6 @@ package require tcltest
 
 ::tcltest::configure {*}$argv
 
-# TODO on loan, remove
-file copy -force [file join [::tcltest::configure -testdir] eval2.csv] [::tcltest::configure -tmpdir]
-
 ::tcltest::testConstraint skip 0
 ::tcltest::testConstraint noskip 1
 foreach unit {
@@ -33,20 +30,15 @@ package require sqlite3
 
 ::tcltest::loadTestedCommands
 
+package require conf
+conf msgcat [namespace current]
+
 #source [file join H:/starkits csvops.kit]
 namespace eval ::starkit [list variable topdir [file join .. topdir]]
-::tcl::tm::path add [file join $starkit::topdir lib]
-set auto_path [linsert $auto_path 0 [file join $starkit::topdir lib]]
 set ::argv {} ; package require csvops
 
 foreach file [glob -dir [file join .. topdir lib csvops ssrc] *.tcl] {
     source $file
-}
-if no {
-namespace import ::msgcat::mc
-::msgcat::mclocale sv
-::msgcat::mcload [file join $::starkit::topdir msgs]
-#::msgcat::mcload [file join $::starkit::topdir .. msgs]
 }
 
 # NOTE viewFile suppresses ending newline
@@ -65,6 +57,7 @@ namespace import ::msgcat::mc
 ::tcltest::test sql-methods-1.0 {} -setup {
     ::tcltest::makeFile "foo;bar;baz\n0;foo;ab\n1;snarf;cd\n2;blue;ef" a.csv
     set ::options(-separator) \;
+    set ::options(-convert-decimal) {read write}
     set db [DB new]
     $db readTable t1 [file join [::tcltest::configure -tmpdir] a.csv]
     set res {}
@@ -106,6 +99,7 @@ namespace import ::msgcat::mc
 
 ::tcltest::test sql-methods-1.1 {} -setup {
     set ::options(-separator) \;
+    set ::options(-convert-decimal) {read write}
     set res {}
 } -body {
     set db [DB new]
@@ -139,6 +133,7 @@ namespace import ::msgcat::mc
 
 ::tcltest::test sql-methods-1.2 {} -setup {
     set ::options(-separator) \;
+    set ::options(-convert-decimal) {read write}
     set res {}
 } -body {
     set db [DB new]
@@ -162,6 +157,7 @@ namespace import ::msgcat::mc
 
 ::tcltest::test sql-methods-1.3 {} -setup {
     set ::options(-separator) \;
+    set ::options(-convert-decimal) {read write}
     set res {}
 } -body {
     set db [DB new]
@@ -291,6 +287,7 @@ namespace import ::msgcat::mc
 
 ::tcltest::test row_to_array-1.0 {get:} -constraints {row_to_array} -setup {
     set ::options(-separator) \;
+    set ::options(-convert-decimal) {read write}
     ::tcltest::makeFile "1;a;\n2;b;29\n3;c;23" foobar.csv
     set r [DB new]
     $r create t1 foo bar baz
@@ -345,6 +342,7 @@ namespace import ::msgcat::mc
 
 ::tcltest::test compare_columns-2.0 {getColumn: compare columns for equality} -constraints {compare_columns} -setup {
     set ::options(-separator) \;
+    set ::options(-convert-decimal) {read write}
     ::tcltest::makeFile "1;a;\n2;b;29\n3;c;23" foobar.csv
     ::tcltest::makeFile "1;a;83\n2;b;29\n4;c;" bazqux.csv
     set r [DB new]
@@ -367,6 +365,7 @@ namespace import ::msgcat::mc
 
 ::tcltest::test compare_columns-2.1 {getColumn: compare columns for numeric difference} -constraints {compare_columns} -setup {
     set ::options(-separator) \;
+    set ::options(-convert-decimal) {read write}
     ::tcltest::makeFile "1;a;\n2;b;29\n3;c;23" foobar.csv
     ::tcltest::makeFile "1;a;83\n2;b;29\n4;c;" bazqux.csv
     set r [DB new]
@@ -389,6 +388,7 @@ namespace import ::msgcat::mc
 
 ::tcltest::test compare_columns-2.2 {getColumn: compare columns for numeric difference, with empty cells} -constraints {compare_columns} -setup {
     set ::options(-separator) \;
+    set ::options(-convert-decimal) {read write}
     ::tcltest::makeFile "1;a;\n2;b;29\n3;c;23" foobar.csv
     ::tcltest::makeFile "1;a;83\n2;b;29\n4;c;" bazqux.csv
     set r [DB new]
@@ -409,6 +409,7 @@ namespace import ::msgcat::mc
 
 ::tcltest::test compare_columns-2.3 {getColumn: compare columns for numeric difference, decimal numbers} -constraints {compare_columns} -setup {
     set ::options(-separator) \;
+    set ::options(-convert-decimal) {read write}
     ::tcltest::makeFile "1;a;;1,67\n2;b;29;2,05\n3;c;23;3" foobar.csv
     ::tcltest::makeFile "1;a;83;0,68\n2;b;29;4,12\n4;c;;1,05" bazqux.csv
     set r [DB new]
@@ -429,6 +430,7 @@ namespace import ::msgcat::mc
 
 ::tcltest::test compare_columns-2.4 {getColumn: serial comparison for equality -- integer} -constraints {compare_columns} -setup {
     set ::options(-separator) \;
+    set ::options(-convert-decimal) {read write}
     ::tcltest::makeFile "1;a;;1,67\n2;b;29;2,05\n3;c;23;3" foobar.csv
     ::tcltest::makeFile "1;a;83;0,68\n2;b;29;4,12\n4;c;;1,05" bazqux.csv
     set r [DB new]
@@ -449,6 +451,7 @@ namespace import ::msgcat::mc
 
 ::tcltest::test compare_columns-2.5 {getColumn: serial comparison for equality -- string} -constraints {compare_columns} -setup {
     set ::options(-separator) \;
+    set ::options(-convert-decimal) {read write}
     ::tcltest::makeFile "1;a;;1,67\n2;b;29;2,05\n3;c;23;3" foobar.csv
     ::tcltest::makeFile "1;a;83;0,68\n2;b;29;4,12\n4;c;;1,05" bazqux.csv
     set r [DB new]
@@ -469,6 +472,7 @@ namespace import ::msgcat::mc
 
 ::tcltest::test compare_columns-2.6 {getColumn: serial comparison for equality -- decimal} -constraints {compare_columns} -setup {
     set ::options(-separator) \;
+    set ::options(-convert-decimal) {read write}
     ::tcltest::makeFile "1;a;;1,67\n2;b;29;2,05\n3;c;23;1,0500" foobar.csv
     ::tcltest::makeFile "1;a;83;0,68\n2;b;29;4,12\n4;c;;1,05" bazqux.csv
     set r [DB new]
@@ -503,6 +507,7 @@ namespace import ::msgcat::mc
 
 ::tcltest::test handle_empties-1.1 {getColumnValues: set nulls to 0} -constraints {noskip handle_empties} -setup {
     set ::options(-separator) \;
+    set ::options(-convert-decimal) {read write}
     ::tcltest::makeFile "1;2;3;4\n5;6;;8" empties.csv
     set p [DB new]
     $p create t1 a b c d
@@ -885,6 +890,7 @@ foreach file [glob -dir [file join $starkit::topdir _src] *.tcl] {
 
 ::tcltest::test result_order_by-1.0 {result_order_by: (force text sorting)} -constraints {result_order_by} -setup {
     set ::options(-separator) \;
+    set ::options(-convert-decimal) {read write}
     set r [DB new]
     $r create t1 {a text} b
     $r loadTable t1 [file join [::tcltest::configure -tmpdir] a.csv]
@@ -899,6 +905,7 @@ foreach file [glob -dir [file join $starkit::topdir _src] *.tcl] {
 
 ::tcltest::test result_order_by-1.1 {result_order_by:} -constraints {result_order_by} -setup {
     set ::options(-separator) \;
+    set ::options(-convert-decimal) {read write}
     set r [DB new]
     $r create t1 a b
     $r loadTable t1 [file join [::tcltest::configure -tmpdir] a.csv]
@@ -912,6 +919,7 @@ foreach file [glob -dir [file join $starkit::topdir _src] *.tcl] {
 
 ::tcltest::test result_order_by-1.2 {result_order_by: (force text sorting)} -constraints {result_order_by} -setup {
     set ::options(-separator) \;
+    set ::options(-convert-decimal) {read write}
     set r [DB new]
     $r create t1 {a text} b
     $r loadTable t1 [file join [::tcltest::configure -tmpdir] a.csv]
@@ -925,6 +933,7 @@ foreach file [glob -dir [file join $starkit::topdir _src] *.tcl] {
 
 ::tcltest::test result_order_by-1.3 {result_order_by:} -constraints {result_order_by} -setup {
     set ::options(-separator) \;
+    set ::options(-convert-decimal) {read write}
     set r [DB new]
     $r create t1 a b
     $r loadTable t1 [file join [::tcltest::configure -tmpdir] a.csv]
@@ -977,6 +986,7 @@ foreach file [glob -dir [file join $starkit::topdir _src] *.tcl] {
 ::tcltest::test write_table-1.0 {write_table} -constraints write_table -setup {
     set ::options(-separator) \;
     set ::options(-oseparator) \;
+    set ::options(-convert-decimal) {read write}
     ::tcltest::makeFile "0;foo\n1;snarf\n2;blue" a.csv
     ::tcltest::makeFile "0;bagel\n1;snatz\n3;driver" b.csv
     set r [DB new]

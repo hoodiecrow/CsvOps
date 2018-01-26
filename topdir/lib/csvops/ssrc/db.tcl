@@ -67,7 +67,6 @@ oo::class create DB {
     }
 
     method dict args {
-<<<<<<< HEAD
         set o [OptionHandler new]
         $o option -all
         $o option -values flag 1
@@ -76,9 +75,6 @@ oo::class create DB {
         if {[info exists dictOpts(-all)]} {
             set sql [format {SELECT * FROM %s} $dictOpts(-all)]
         }
-=======
-        set sql [lindex $args end]
->>>>>>> refs/remotes/origin/master
         set ln 1
         set res {}
         dbcmd eval $sql ROW {
@@ -130,16 +126,8 @@ oo::class create DB {
     method dumpTable args {
         set o [OptionHandler new]
         $o option -values flag 1
-        $o option -decimal default ,
-<<<<<<< HEAD
         variable dumpTableOpts
         lassign [$o extract [self namespace]::dumpTableOpts {*}$args] tableid filename 
-=======
-#        $o option -oseparator
-        variable opts
-        set opts(-oseparator) $options(-oseparator)
-        lassign [$o extract [self namespace]::opts {*}$args] tableid filename 
->>>>>>> refs/remotes/origin/master
         try {
             open $filename w
         } on ok f {
@@ -167,8 +155,8 @@ oo::class create DB {
         set opts {decimal ,}
         set opts [dict merge $opts $args]
         lmap val $row {
-            if {[string is double -strict $val]} {
-                string map [list . [dict get $opts decimal]] $val
+            if {[string is double -strict $val] && "write" in $::options(-convert-decimal)} {
+                string map {. ,} $val
             } else {
                 string map {'' '} $val
             }
@@ -177,7 +165,11 @@ oo::class create DB {
 
     method InputFilterRow row {
         lmap val $row {
-            set flval [string map {, .} $val]
+            if {"read" in $::options(-convert-decimal)} {
+                set flval [string map {, .} $val]
+            } else {
+                set flval $val
+            }
             if {[regexp {^0\d+$} $val]} {
                 # kludge for numeric constants beginning with 0
                 format '%s' $val

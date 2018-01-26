@@ -14,5 +14,6 @@ file delete -force $outfile $errfile
 
 ::tcltest::configure -testdir $testdir -outfile $outfile -errfile $errfile
 ::tcltest::configure -tmpdir [file join $testdir temp]
+::tcltest::configure -loadfile [file join $testdir common.tcl]
 
 ::tcltest::runAllTests
