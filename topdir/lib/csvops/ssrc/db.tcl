@@ -1,6 +1,5 @@
 
 package require csv
-package require sqlite3
 package require tdom
 
 oo::class create DB {
