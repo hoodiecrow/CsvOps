@@ -2,9 +2,6 @@ package require tcltest
 
 ::tcltest::configure {*}$argv
 
-# TODO on loan, remove
-file copy -force [file join [::tcltest::configure -testdir] eval2.csv] [::tcltest::configure -tmpdir]
-
 ::tcltest::testConstraint skip 0
 ::tcltest::testConstraint noskip 1
 foreach unit {
@@ -33,20 +30,15 @@ package require sqlite3
 
 ::tcltest::loadTestedCommands
 
+package require conf
+conf msgcat [namespace current]
+
 #source [file join H:/starkits csvops.kit]
 namespace eval ::starkit [list variable topdir [file join .. topdir]]
-::tcl::tm::path add [file join $starkit::topdir lib]
-set auto_path [linsert $auto_path 0 [file join $starkit::topdir lib]]
 set ::argv {} ; package require csvops
 
 foreach file [glob -dir [file join .. topdir lib csvops ssrc] *.tcl] {
     source $file
-}
-if no {
-namespace import ::msgcat::mc
-::msgcat::mclocale sv
-::msgcat::mcload [file join $::starkit::topdir msgs]
-#::msgcat::mcload [file join $::starkit::topdir .. msgs]
 }
 
 # NOTE viewFile suppresses ending newline
