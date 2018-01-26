@@ -38,6 +38,7 @@ oo::objdefine csvops {
         $o option -expand default auto
         $o option -fields default {}
         $o option -safe flag 1
+        $o option -convert-decimal default {read write}
 
         lassign [$o extract ::options {*}$args] filename
         my option-expand ::options -expand auto empty none

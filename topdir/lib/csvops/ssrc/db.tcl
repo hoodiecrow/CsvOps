@@ -126,7 +126,6 @@ oo::class create DB {
     method dumpTable args {
         set o [OptionHandler new]
         $o option -values flag 1
-        $o option -decimal default ,
         variable dumpTableOpts
         lassign [$o extract [self namespace]::dumpTableOpts {*}$args] tableid filename 
         try {
@@ -137,7 +136,7 @@ oo::class create DB {
             if {!$dumpTableOpts(-values)} {
                 puts $f [::csv::join $fields $::options(-oseparator)]
             }
-            puts -nonewline $f [::csv::joinlist [my OutputFilterList $rows decimal $dumpTableOpts(-decimal)] $::options(-oseparator)]
+            puts -nonewline $f [::csv::joinlist [my OutputFilterList $rows] $::options(-oseparator)]
         } finally {
             catch {chan close $f}
             $o destroy
@@ -156,8 +155,8 @@ oo::class create DB {
         set opts {decimal ,}
         set opts [dict merge $opts $args]
         lmap val $row {
-            if {[string is double -strict $val]} {
-                string map [list . [dict get $opts decimal]] $val
+            if {[string is double -strict $val] && "write" in $::options(-convert-decimal)} {
+                string map {. ,} $val
             } else {
                 string map {'' '} $val
             }
@@ -166,7 +165,11 @@ oo::class create DB {
 
     method InputFilterRow row {
         lmap val $row {
-            set flval [string map {, .} $val]
+            if {"read" in $::options(-convert-decimal)} {
+                set flval [string map {, .} $val]
+            } else {
+                set flval $val
+            }
             if {[regexp {^0\d+$} $val]} {
                 # kludge for numeric constants beginning with 0
                 format '%s' $val
