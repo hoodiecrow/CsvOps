@@ -69,7 +69,7 @@ oo::class create DB {
 
     method dict args {
         set sql [lindex $args end]
-        set ln 0
+        set ln 1
         set res {}
         dbcmd eval $sql ROW {
             dict set res * $ROW(*)
