@@ -519,11 +519,10 @@ namespace import ::msgcat::mc
     set d [DB new]
     $d create t1 a b c
 } -body {
-    $d tally
     $d tally a
     $d tally b
     $d tally c
-    $d insertTally t1
+    $d insert t1 [$d tally]
     $d dict {SELECT * FROM t1}
 } -cleanup {
     $d destroy
@@ -534,14 +533,13 @@ namespace import ::msgcat::mc
     set d [DB new]
     $d create t1 foo bar baz
 } -body {
-    $d tally
     $d tally foo
     $d tally foo
     $d tally foo
     $d tally bar
     $d tally bar
     $d tally baz
-    $d insertTally t1
+    $d insert t1 [$d tally]
     $d dict {SELECT * FROM t1}
 } -cleanup {
     $d destroy
@@ -785,7 +783,9 @@ if {![file exists $STARKITS]} {
     set SANDBOX [file normalize [file join ~ code]]
 }
 
+if no {
 set options(-separator) \;
+}
 
 
 if no {
@@ -884,6 +884,7 @@ foreach file [glob -dir [file join $starkit::topdir _src] *.tcl] {
     ::tcltest::makeFile "2;a\n11;a\n1;b\n2;b\n11;A\n1;A" a.csv
 
 ::tcltest::test result_order_by-1.0 {result_order_by: (force text sorting)} -constraints {result_order_by} -setup {
+    set ::options(-separator) \;
     set r [DB new]
     $r create t1 {a text} b
     $r loadTable t1 [file join [::tcltest::configure -tmpdir] a.csv]
@@ -892,10 +893,12 @@ foreach file [glob -dir [file join $starkit::topdir _src] *.tcl] {
 } -cleanup {
     $r destroy
     log::lvSuppressLE i 1
+    array unset ::options
 } -result {{a b} {1 A} {11 a} {11 A} {2 a} {1 b} {2 b}}
 
 
 ::tcltest::test result_order_by-1.1 {result_order_by:} -constraints {result_order_by} -setup {
+    set ::options(-separator) \;
     set r [DB new]
     $r create t1 a b
     $r loadTable t1 [file join [::tcltest::configure -tmpdir] a.csv]
@@ -903,10 +906,12 @@ foreach file [glob -dir [file join $starkit::topdir _src] *.tcl] {
     dict values [$r dict {SELECT * FROM t1 ORDER BY b COLLATE NOCASE ASC, a}]
 } -cleanup {
     $r destroy
+    array unset ::options
 } -result {{a b} {1 A} {2 a} {11 a} {11 A} {1 b} {2 b}}
 
 
 ::tcltest::test result_order_by-1.2 {result_order_by: (force text sorting)} -constraints {result_order_by} -setup {
+    set ::options(-separator) \;
     set r [DB new]
     $r create t1 {a text} b
     $r loadTable t1 [file join [::tcltest::configure -tmpdir] a.csv]
@@ -914,10 +919,12 @@ foreach file [glob -dir [file join $starkit::topdir _src] *.tcl] {
     dict values [$r dict {SELECT * FROM t1 ORDER BY b, a}]
 } -cleanup {
     $r destroy
+    array unset ::options
 } -result {{a b} {1 A} {11 A} {11 a} {2 a} {1 b} {2 b}}
 
 
 ::tcltest::test result_order_by-1.3 {result_order_by:} -constraints {result_order_by} -setup {
+    set ::options(-separator) \;
     set r [DB new]
     $r create t1 a b
     $r loadTable t1 [file join [::tcltest::configure -tmpdir] a.csv]
@@ -925,6 +932,7 @@ foreach file [glob -dir [file join $starkit::topdir _src] *.tcl] {
     dict values [$r dict {SELECT * FROM t1 ORDER BY b, a}]
 } -cleanup {
     $r destroy
+    array unset ::options
 } -result {{a b} {1 A} {11 A} {2 a} {11 a} {1 b} {2 b}}
 
 
@@ -967,19 +975,21 @@ foreach file [glob -dir [file join $starkit::topdir _src] *.tcl] {
     ::tcltest::makeFile "5;6;7;8\n6;7;8;5" b.csv
 
 ::tcltest::test write_table-1.0 {write_table} -constraints write_table -setup {
+    set ::options(-separator) \;
+    set ::options(-oseparator) \;
     ::tcltest::makeFile "0;foo\n1;snarf\n2;blue" a.csv
     ::tcltest::makeFile "0;bagel\n1;snatz\n3;driver" b.csv
     set r [DB new]
     $r create t1 foo bar
     $r loadTable t1 [file join [::tcltest::configure -tmpdir] a.csv]
-    $r create t2 foo bar
-    $r loadTable t2 [file join [::tcltest::configure -tmpdir] b.csv]
     ::tcltest::makeFile {} output.csv
 } -body {
     $r dumpTable t1 [file join [::tcltest::configure -tmpdir] output.csv]
     ::tcltest::viewFile output.csv
 } -cleanup {
     $r destroy
+    array unset ::options
+    log::lvSuppressLE i 1
 } -result {foo;bar
 0;foo
 1;snarf
@@ -1003,7 +1013,7 @@ foreach file [glob -dir [file join $starkit::topdir _src] *.tcl] {
 } -result {4 2}
 
 
-::tcltest::test validator_one-of-1.0 {one-of:} -constraints {validator_oneOf} -setup {
+::tcltest::test validator_one-of-1.1 {one-of:} -constraints {validator_oneOf} -setup {
     set r [DB new]
     $r create t1 a b c d
     $r fillTable t1 {1 2 3 4} {2 3 4 1} {3 4 1 2} {4 1 2 3}
@@ -1011,7 +1021,7 @@ foreach file [glob -dir [file join $starkit::topdir _src] *.tcl] {
     $r dict -values {SELECT * FROM t1 WHERE c NOT IN (1, 3)}
 } -cleanup {
     $r destroy
-} -result {{2 3 4 1} {4 1 2 3}}
+} -result {{a b c d} {2 3 4 1} {4 1 2 3}}
 
 
 ::tcltest::test validator_matches-1.0 {matches:} -constraints {validator_matches} -setup {
@@ -1022,7 +1032,7 @@ foreach file [glob -dir [file join $starkit::topdir _src] *.tcl] {
     $r dict -values {SELECT * FROM t1 WHERE a LIKE 'f_o'}
 } -cleanup {
     $r destroy
-} -result {{fio bar} {foo bar} {foo qux}}
+} -result {{a b} {fio bar} {foo bar} {foo qux}}
 
 
 ::tcltest::test validator_validate-1.0 {validate:} -constraints {validator_validate} -setup {
@@ -1034,7 +1044,7 @@ foreach file [glob -dir [file join $starkit::topdir _src] *.tcl] {
     $r dict -values {SELECT * FROM t1 WHERE validate(a)}
 } -cleanup {
     $r destroy
-} -result {{foo bar} {foo qux}}
+} -result {{a b} {foo bar} {foo qux}}
 
 
 ::tcltest::test validator_validate-1.1 {validate:} -constraints {validator_validate} -setup {
@@ -1048,7 +1058,7 @@ foreach file [glob -dir [file join $starkit::topdir _src] *.tcl] {
     $r dict -values {SELECT * FROM t1 WHERE validate(a, b)}
 } -cleanup {
     $r destroy
-} -result {{foo bar}}
+} -result {{a b} {foo bar}}
 
 
 ::tcltest::cleanupTests

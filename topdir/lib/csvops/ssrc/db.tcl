@@ -1,14 +1,14 @@
 
+if {[llength [info commands ::DB]] > 0} return
+
 package require csv
 package require tdom
 
 oo::class create DB {
-    variable options tally
+    variable tally
 
     constructor {{filename :memory:}} {
         sqlite3 [self namespace]::dbcmd $filename
-        array set options {-oseparator ;}
-        array set options [array get ::options]
     }
 
     destructor {
@@ -67,7 +67,14 @@ oo::class create DB {
     }
 
     method dict args {
-        set sql [lindex $args end]
+        set o [OptionHandler new]
+        $o option -all
+        $o option -values flag 1
+        variable dictOpts
+        lassign [$o extract [self namespace]::dictOpts {*}$args] sql
+        if {[info exists dictOpts(-all)]} {
+            set sql [format {SELECT * FROM %s} $dictOpts(-all)]
+        }
         set ln 1
         set res {}
         dbcmd eval $sql ROW {
@@ -77,8 +84,8 @@ oo::class create DB {
             }
             incr ln
         }
-        if {[lindex $args 0] eq "-values"} {
-            return [lrange [dict values $res] 1 end]
+        if {$dictOpts(-values)} {
+            return [dict values $res]
         } else {
             return $res
         }
@@ -120,19 +127,17 @@ oo::class create DB {
         set o [OptionHandler new]
         $o option -values flag 1
         $o option -decimal default ,
-#        $o option -oseparator
-        variable opts
-        set opts(-oseparator) $options(-oseparator)
-        lassign [$o extract [self namespace]::opts {*}$args] tableid filename 
+        variable dumpTableOpts
+        lassign [$o extract [self namespace]::dumpTableOpts {*}$args] tableid filename 
         try {
             open $filename w
         } on ok f {
-            set t [my dict [format {SELECT * FROM %s} $tableid]]
-            set rows [lassign [dict values $t] fields]
-            if {!$opts(-values)} {
-                puts $f [::csv::join $fields $opts(-oseparator)]
+            set t [my dict -values -all $tableid]
+            set rows [lassign $t fields]
+            if {!$dumpTableOpts(-values)} {
+                puts $f [::csv::join $fields $::options(-oseparator)]
             }
-            puts -nonewline $f [::csv::joinlist [my OutputFilterList $rows decimal $opts(-decimal)] $opts(-oseparator)]
+            puts -nonewline $f [::csv::joinlist [my OutputFilterList $rows decimal $dumpTableOpts(-decimal)] $::options(-oseparator)]
         } finally {
             catch {chan close $f}
             $o destroy
@@ -178,26 +183,16 @@ oo::class create DB {
     method GetRows channel {
         set result {}
         while {[gets $channel line] >= 0} {
-            lappend result [my InputFilterRow [::csv::split $line $options(-separator)]]
+            lappend result [my InputFilterRow [::csv::split $line $::options(-separator)]]
         }
         return $result
     }
 
     method tally {{key {}}} {
-        if {$key eq {}} {
-            set tally {}
-        } else {
+        if {$key ne {}} {
             dict incr tally $key
         }
-    }
-
-    method insertTally tableid {
-        my insert $tableid [dict values $tally]
-        set tally {}
-    }
-
-    method dumpTally {} {
-        set tally
+        dict values $tally
     }
 
     method html {tableid caption} {

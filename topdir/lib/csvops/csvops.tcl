@@ -29,7 +29,6 @@ oo::objdefine csvops {
     variable int data
 
     method exec args {
-        global options
         set o [OptionHandler new]
         $o option -alternate default 0 flag 1
         $o option -rows default :
@@ -41,16 +40,14 @@ oo::objdefine csvops {
         $o option -safe flag 1
 
         lassign [$o extract ::options {*}$args] filename
-        set ::options(-expand) [my -expand-process $::options(-expand)]
-        if {![info exists ::options(-oseparator)]} {
-            set ::options(-oseparator) $::options(-separator)
-        }
+        my option-expand ::options -expand auto empty none
+        my option-fallback ::options -oseparator -separator
 
-        lappend init {package require fileutil}
+        set preamble {}
 
         if {[info exists starkit::mode] && $starkit::mode eq "unwrapped"} {
             error deprecated
-            my RunDebug {*}$init {vwait forever}
+            my RunDebug {*}$preamble {vwait forever}
         } else {
             try { 
                 if {$filename eq {}} {
@@ -62,9 +59,9 @@ oo::objdefine csvops {
                 }
             } on ok script { 
                 if {$::options(-safe)} {
-                    my RunSafe {*}$init $script
+                    my RunSafe {*}$preamble $script
                 } else {
-                    my RunOpen {*}$init $script
+                    my RunOpen {*}$preamble $script
                 }
             } on error {msg opts} { 
                 dict incr opts -level 1
@@ -95,11 +92,23 @@ oo::objdefine csvops {
         ::safe::interpDelete $int
     }
 
-    method -expand-process val {
-        try {
-            ::tcl::prefix match {auto empty none} $val
+    method option-expand {varName opt args} {
+        upvar 0 $varName var
+        if no {
+        set var($opt) [try {
+            ::tcl::prefix match -message value $args $var($opt)
         } on error {} {
-            return -code error [mc {illegal expand mode %s} $val]
+            return -code error [mc {illegal expand mode %s} $var($opt)]
+        }]
+        } else {
+        set var($opt) [::tcl::prefix match -message value $args $var($opt)]
+        }
+    }
+
+    method option-fallback {varName opt1 opt2} {
+        upvar 0 $varName var
+        if {![info exists var($opt1)]} {
+            set var($opt1) $var($opt2)
         }
     }
 
