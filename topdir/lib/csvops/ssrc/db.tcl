@@ -136,7 +136,7 @@ oo::class create DB {
             if {!$dumpTableOpts(-values)} {
                 puts $f [::csv::join $fields $::options(-oseparator)]
             }
-            puts -nonewline $f [::csv::joinlist [my OutputFilterList $rows decimal $dumpTableOpts(-decimal)] $::options(-oseparator)]
+            puts -nonewline $f [::csv::joinlist [my OutputFilterList $rows] $::options(-oseparator)]
         } finally {
             catch {chan close $f}
             $o destroy
