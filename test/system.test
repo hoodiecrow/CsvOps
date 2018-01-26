@@ -19,7 +19,7 @@ if {![file exists $STARKITS]} {
     set STARKITS [file normalize [file join ~ starkits]]
     set SANDBOX [file normalize [file join ~ code]]
 }
-set EXEC [list exec tclsh [file join $STARKITS csvops.kit]]
+set EXEC [list ::exec tclsh [file join $STARKITS csvops.kit]]
 set FOO_CO [file join [::tcltest::configure -tmpdir] foo.co]
 
 ::tcltest::test system-1.0 {Changed running without filename from error to just open console.} -constraints {mute system} -setup {
@@ -29,7 +29,7 @@ set FOO_CO [file join [::tcltest::configure -tmpdir] foo.co]
 } -result {}
 
 
-::tcltest::test system-1.1 {} -constraints {system} -setup {
+::tcltest::test system-1.1 {} -constraints {TODO system} -setup {
 } -body {
     {*}$EXEC foo:bar
 } -cleanup {
@@ -57,7 +57,7 @@ set FOO_CO [file join [::tcltest::configure -tmpdir] foo.co]
     ::tcltest::viewFile foo.out
 } -cleanup {
     log::lvSuppressLE i 1
-} -result {{-alternate 0} {-cols {}} {-expand auto} {-fields {}} {-rows :} {-separator {;}}}
+} -result {{-alternate 0} {-cols {}} {-expand auto} {-fields {}} {-oseparator {;}} {-rows :} {-safe 0} {-separator {;}}}
 
 
 ::tcltest::test system-2.1 {options: all} -constraints {system} -setup {
@@ -71,7 +71,7 @@ set FOO_CO [file join [::tcltest::configure -tmpdir] foo.co]
     {*}$EXEC -alternate -cols ab -expand empty -fields cd -rows ef -separator gh $FOO_CO
     ::tcltest::viewFile foo.out
 } -cleanup {
-} -result {{-alternate 1} {-cols ab} {-expand empty} {-fields cd} {-rows ef} {-separator gh}}
+} -result {{-alternate 1} {-cols ab} {-expand empty} {-fields cd} {-oseparator gh} {-rows ef} {-safe 0} {-separator gh}}
 
 
 ::tcltest::test system-2.2 {options: abbreviated} -constraints {system} -setup {
@@ -85,10 +85,10 @@ set FOO_CO [file join [::tcltest::configure -tmpdir] foo.co]
     {*}$EXEC -e n $FOO_CO
     ::tcltest::viewFile foo.out
 } -cleanup {
-} -result {{-alternate 0} {-cols {}} {-expand none} {-fields {}} {-rows :} {-separator {;}}}
+} -result {{-alternate 0} {-cols {}} {-expand none} {-fields {}} {-oseparator {;}} {-rows :} {-safe 0} {-separator {;}}}
 
 
-::tcltest::test system-2.3 {options: -expand unknown value} -constraints {system} -setup {
+::tcltest::test system-2.3 {options: -expand unknown value} -constraints {TODO system} -setup {
     ::tcltest::makeFile {
         ::fileutil::writeFile foo.out [lmap opt [lsort [array names ::options]] {
             list $opt $::options($opt)
@@ -108,7 +108,8 @@ set FOO_CO [file join [::tcltest::configure -tmpdir] foo.co]
         DB create s
         s create t1 a b c d e
         s loadTable t1 eval.csv
-        s dumpTable -values -decimal . -oseparator , t1 foobar.csv
+        #s dumpTable -values -decimal . -oseparator , t1 foobar.csv
+        s dumpTable -values -decimal . t1 foobar.csv
     } foo.co
 } -body {
     {*}$EXEC -sep , $FOO_CO
@@ -130,7 +131,7 @@ set FOO_CO [file join [::tcltest::configure -tmpdir] foo.co]
         s loadTable t1 eval.csv
         s create t2 a b
         s eval {INSERT INTO t2 SELECT a, b FROM t1}
-        s dumpTable -values -decimal . -oseparator , t2 foobar.csv
+        s dumpTable -values -decimal . t2 foobar.csv
     } foo.co
 } -body {
     {*}$EXEC -sep , $FOO_CO
@@ -152,7 +153,7 @@ set FOO_CO [file join [::tcltest::configure -tmpdir] foo.co]
         s loadTable t1 eval.csv
         s create t2 a b c d e
         s eval {INSERT INTO t2 SELECT * FROM t1 LIMIT 4,2}
-        s dumpTable -values -decimal . -oseparator , t2 foobar.csv
+        s dumpTable -values -decimal . t2 foobar.csv
     } foo.co
 } -body {
     {*}$EXEC -sep , $FOO_CO
@@ -170,7 +171,7 @@ set FOO_CO [file join [::tcltest::configure -tmpdir] foo.co]
         s loadTable t1 eval2.csv
         s create t2 nr msg a
         s eval {INSERT INTO t2 SELECT a, b, c * 2 FROM t1}
-        s dumpTable -values -decimal . -oseparator , t2 foobar.csv
+        s dumpTable -values -decimal . t2 foobar.csv
     } foo.co
 } -body {
     {*}$EXEC -sep , $FOO_CO
@@ -193,7 +194,7 @@ set FOO_CO [file join [::tcltest::configure -tmpdir] foo.co]
         s loadTable t1 eval2.csv
         s create t2 nr msg a b
         s eval {INSERT INTO t2 SELECT a, b, c, c * 2 FROM t1}
-        s dumpTable -values -decimal . -oseparator , t2 foobar.csv
+        s dumpTable -values -decimal . t2 foobar.csv
     } foo.co
 } -body {
     {*}$EXEC -sep , $FOO_CO
@@ -221,7 +222,7 @@ set FOO_CO [file join [::tcltest::configure -tmpdir] foo.co]
         foreach nr $nrs {
             s insert t2 [lmap item [lrange [lsearch -inline -index 0 $d $nr] 0 2] {format '%s' $item}]
         }
-        s dumpTable -values -decimal . -oseparator , t2 foobar.csv
+        s dumpTable -values -decimal . t2 foobar.csv
     } foo.co
 } -body {
     {*}$EXEC -sep , $FOO_CO

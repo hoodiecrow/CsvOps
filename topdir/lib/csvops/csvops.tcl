@@ -28,8 +28,7 @@ oo::object create csvops
 oo::objdefine csvops {
     variable int data
 
-    method reset {} {
-        global options
+    method exec args {
         set o [OptionHandler new]
         $o option -alternate default 0 flag 1
         $o option -rows default :
@@ -38,42 +37,52 @@ oo::objdefine csvops {
         $o option -oseparator
         $o option -expand default auto
         $o option -fields default {}
+        $o option -safe flag 1
 
-        lassign [$o extract ::options {*}$::argv] filename
-        #error [list $::argv $filename]
-        set ::options(-expand) [my -expand-process $::options(-expand)]
+        lassign [$o extract ::options {*}$args] filename
+        my option-expand ::options -expand auto empty none
+        my option-fallback ::options -oseparator -separator
 
-        lappend init {package require fileutil}
-        lappend init [list array set ::options [array get ::options]]
+        set preamble {}
 
-        if {[info exists starkit] && $starkit::mode eq "unwrapped"} {
-            my RunDebug {*}$init {vwait forever}
-        } elseif {$filename eq {}} {
-            ; # just loading
+        if {[info exists starkit::mode] && $starkit::mode eq "unwrapped"} {
+            error deprecated
+            my RunDebug {*}$preamble {vwait forever}
         } else {
-            try {
-                cd [file dirname $filename]
-                ::fileutil::cat $filename
-            } on ok script {
-                my RunSafe {*}$init $script
-            } on error {msg opts} {
+            try { 
+                if {$filename eq {}} {
+                    format {package require tkcon ; tkcon show}
+                } else {
+                    # TODO see if exit can be dispensed with
+                    cd [file dirname $filename]
+                    format "%s;exit" [::fileutil::cat $filename]
+                }
+            } on ok script { 
+                if {$::options(-safe)} {
+                    my RunSafe {*}$preamble $script
+                } else {
+                    my RunOpen {*}$preamble $script
+                }
+            } on error {msg opts} { 
                 dict incr opts -level 1
-                return -options $opts [mc {Load %s} $msg]
-            }
+                # TODO the error message does not change when recasting
+                return -options $opts [mc {Load %s} $msg] 
+            } 
         }
     }
 
-    method RunSafe args {
-        if no {
-        ::csvops::log init
+    method RunOpen args {
+        set dir [file join $::starkit::topdir lib csvops ssrc]
+        foreach file [glob -nocomplain -directory $dir *.tcl] {
+            uplevel #0 [list source -encoding utf-8 $file]
         }
-        lappend ::auto_path .
-        # TODO kludgy add: topdir/lib
-        if no {
-        ::tcl::tm::path add [file join [file dirname [info script]] ..]
+        foreach arg [lrange $args 0 end-1] {
+            uplevel #0 $arg
         }
+        uplevel #0 [list try [lindex $args end] on error msg {error [mc {Failure %s} $msg]}]
+    }
 
-        if no {
+    method RunSafe args {
         set int [::safe::interpCreate]
         Script_PolicyInit $int
         foreach arg [lrange $args 0 end-1] {
@@ -81,43 +90,26 @@ oo::objdefine csvops {
         }
         $int eval [list try [lindex $args end] on error msg {error [mc {Failure %s} $msg]}]
         ::safe::interpDelete $int
-        } else {
-        set int {}
-        Script_PolicyInit $int
-        #error [interp alias $int mc]
-        foreach arg [lrange $args 0 end-1] {
-            interp eval $int $arg
-        }
-        interp eval $int [list try [lindex $args end] on error msg {error [mc {Failure %s} $msg]}]
-        }
+    }
 
+    method option-expand {varName opt args} {
+        upvar 0 $varName var
         if no {
-        if {[::csvops::log done]} exit
-        } else {
-        exit
-        }
-    }
-
-    method RunDebug args {
-        set int [interp create]
-        Debug_PolicyInit $int
-
-        foreach arg $args {
-            $int eval $arg
-        }
-
-        interp delete $int
-    }
-
-    method -expand-process val {
-        try {
-            ::tcl::prefix match {auto empty none} $val
+        set var($opt) [try {
+            ::tcl::prefix match -message value $args $var($opt)
         } on error {} {
-            return -code error [mc {illegal expand mode %s} $val]
+            return -code error [mc {illegal expand mode %s} $var($opt)]
+        }]
+        } else {
+        set var($opt) [::tcl::prefix match -message value $args $var($opt)]
+        }
+    }
+
+    method option-fallback {varName opt1 opt2} {
+        upvar 0 $varName var
+        if {![info exists var($opt1)]} {
+            set var($opt1) $var($opt2)
         }
     }
 
 }
-
-csvops reset
-
