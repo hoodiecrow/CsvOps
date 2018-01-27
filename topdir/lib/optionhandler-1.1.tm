@@ -1,29 +1,8 @@
-# Clean up in case package is reloaded.
-catch {AssertionHandler destroy}
-catch {OptionHandler destroy}
-
-oo::class create AssertionHandler {
-    constructor args {
-        if {[lindex $args 0] eq "-useassertions"} {
-            set args [lrange $args 1 end]
-            oo::objdefine [self] forward assert my Assert
-        } else {
-            oo::objdefine [self] method assert args {}
-        }
-        next {*}$args
-    }
-
-    method Assert expr {
-        if {![uplevel 1 [list expr $expr]]} {
-            return -code error "Assertion failed: $expr"
-        }
-    }
-
-}
+package require assertionhandler
 
 oo::class create OptionHandler {
     mixin AssertionHandler
-    variable data table
+    variable data table varName
 
     constructor args {
         set data {}
@@ -36,7 +15,7 @@ oo::class create OptionHandler {
         my assert {[string match -* $opt]}
         dict set data $opt $args
         if {[dict exists $args flag] && [dict get $args flag]} {
-            dict set data -no$opt flag 1
+            dict set data [regsub {^(-{1,2})} $opt {\1no-}] flag 1
             if {![dict exists $args default]} {
                 dict set data $opt default 0
             }
@@ -48,6 +27,7 @@ oo::class create OptionHandler {
         my assert {![info exists $name]}
         #my assert {[llength $args] > 0}
         array set $name {}
+        set varName $name
         my AddDefaults $name
         my ProcessCmdLine $name {*}$args
     }
@@ -62,6 +42,19 @@ oo::class create OptionHandler {
             }
         }
         return $prefix\nOptions:\n[join [lsort -dictionary $docs] \n]\n
+    }
+
+    method defaultTo {opt1 opt2} {
+        # TODO decide if should fail if opt2 not present
+        if {![info exists $varName\($opt1)]} {
+            if {[info exists $varName\($opt2)]} {
+                set $varName\($opt1) [set $varName\($opt2)]
+            }
+        }
+    }
+
+    method expand {opt values} {
+        set $varName\($opt) [::tcl::prefix match -message value $values [set $varName\($opt)]]
     }
 
     method GetTable {} {
@@ -89,8 +82,8 @@ oo::class create OptionHandler {
                     set opt $word
                 }
                 if {[my IsFlag $opt]} {
-                    if {[string match -no-* $opt]} {
-                        set opt [string range $opt 3 end]
+                    if {[regexp {^-{1,2}no-} $opt]} {
+                        set opt [regsub {no-} $opt {}]
                         set val 0
                     } else {
                         set val 1
