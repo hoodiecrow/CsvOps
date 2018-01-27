@@ -9,12 +9,6 @@ apply {args {
     }
 }} policy.tcl safe.tcl
 
-package require fileutil
-package require control
-# TODO move to main
-package require msgcat
-package require optionhandler
-
 ::control::control assert enabled 1
 
 oo::object create csvops
@@ -35,8 +29,8 @@ oo::objdefine csvops {
         $o option -convert-decimal default {read write}
 
         lassign [$o extract ::options {*}$args] filename
-        my option-expand ::options -expand auto empty none
-        my option-fallback ::options -oseparator -separator
+        $o expand -expand {auto empty none}
+        $o defaultTo -oseparator -separator
 
         set preamble {}
 
@@ -85,26 +79,6 @@ oo::objdefine csvops {
         }
         $int eval [list try [lindex $args end] on error msg {error [mc {Failure %s} $msg]}]
         ::safe::interpDelete $int
-    }
-
-    method option-expand {varName opt args} {
-        upvar 0 $varName var
-        if no {
-        set var($opt) [try {
-            ::tcl::prefix match -message value $args $var($opt)
-        } on error {} {
-            return -code error [mc {illegal expand mode %s} $var($opt)]
-        }]
-        } else {
-        set var($opt) [::tcl::prefix match -message value $args $var($opt)]
-        }
-    }
-
-    method option-fallback {varName opt1 opt2} {
-        upvar 0 $varName var
-        if {![info exists var($opt1)]} {
-            set var($opt1) $var($opt2)
-        }
     }
 
 }
