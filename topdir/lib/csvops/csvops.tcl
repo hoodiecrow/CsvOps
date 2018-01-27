@@ -2,13 +2,6 @@ package provide csvops 1.0
 
 package require log
 
-if no {
-# TODO move to main.tcl
-package require conf
-conf msgcat [namespace current]
-conf resource csvops
-}
-
 apply {args {
     set dir [file dirname [info script]]
     foreach arg $args {
@@ -16,10 +9,9 @@ apply {args {
     }
 }} policy.tcl safe.tcl
 
-#interp alias {} mc {} format
-
 package require fileutil
 package require control
+# TODO move to main
 package require msgcat
 package require optionhandler
 
