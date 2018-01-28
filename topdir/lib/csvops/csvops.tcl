@@ -25,7 +25,7 @@ oo::objdefine csvops {
         $o option -oseparator
         $o option -expand default auto
         $o option -fields default {}
-        $o option -safe flag 1
+        $o option -safe flag 1 default 1
         $o option -convert-decimal default {read write}
 
         lassign [$o extract ::options {*}$args] filename
@@ -48,6 +48,10 @@ oo::objdefine csvops {
                 }
             } on ok script { 
                 if {$::options(-safe)} {
+                    lappend preamble {package require fileutil}
+                    lappend preamble {package require log}
+                    # Note: seems impossible to load modules through the tm
+                    # mechanism in a safe base interpreter.
                     my RunSafe {*}$preamble $script
                 } else {
                     my RunOpen {*}$preamble $script

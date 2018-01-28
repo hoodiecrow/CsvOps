@@ -2,10 +2,6 @@
 # Mostly used inside scripts.
 #
 
-package require control
-
-::control::control assert enabled 1
-
 proc constrain {varName mode args} {
     # normalizes a cell value within a minimum and optional maximum value
     upvar 1 $varName var
