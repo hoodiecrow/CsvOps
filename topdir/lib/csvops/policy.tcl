@@ -3,8 +3,6 @@
 # security policy for the script slave
 #
 
-# TODO refactor this please
-source [file join $starkit::topdir lib csvops ssrc db.tcl]
 proc _DB {slave args} {
     set db [DB {*}$args]
     interp alias $slave $db {} $db
@@ -35,11 +33,4 @@ proc Script_PolicyInit slave {
         interp eval $slave [list set ssrc [file join $::starkit::topdir lib csvops ssrc]]
     }
 
-    interp eval $slave {
-        set files [glob -nocomplain -directory $ssrc *.tcl]
-        foreach file $files {
-            source $file
-        }
-        unset -nocomplain file ssrc
-    }
 }

@@ -7,14 +7,12 @@ apply {args {
     foreach arg $args {
         source -encoding utf-8 [file join $dir $arg]
     }
-}} policy.tcl safe.tcl
-
-::control::control assert enabled 1
+}} policy.tcl safe.tcl db.tcl
 
 oo::object create csvops
 
 oo::objdefine csvops {
-    variable int data
+    variable data
 
     method exec args {
         set o [OptionHandler new]
@@ -61,10 +59,6 @@ oo::objdefine csvops {
     }
 
     method RunOpen args {
-        set dir [file join $::starkit::topdir lib csvops ssrc]
-        foreach file [glob -nocomplain -directory $dir *.tcl] {
-            uplevel #0 [list source -encoding utf-8 $file]
-        }
         foreach arg $args {
             uplevel #0 $arg
         }

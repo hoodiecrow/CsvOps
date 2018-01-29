@@ -189,9 +189,11 @@ oo::class create DB {
         if {$::options(-alternate)} {
             lappend splitcmd -alternate
         }
+            log::logMsg \$splitcmd=$splitcmd
         while {[gets $channel line] >= 0} {
             set data [{*}$splitcmd $line \
                 $::options(-separator) $::options(-delimiter)]
+            log::logMsg \$data=$data
             lappend result [my InputFilterRow $data]
         }
         return $result

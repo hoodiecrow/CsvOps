@@ -34,10 +34,6 @@ conf msgcat [namespace current]
 namespace eval ::starkit [list variable topdir [file join .. topdir]]
 set ::argv {} ; package require csvops
 
-foreach file [glob -dir [file join .. topdir lib csvops ssrc] *.tcl] {
-    source $file
-}
-
 file copy -force [file join [::tcltest::configure -testdir] eval.csv] [::tcltest::configure -tmpdir]
 
 # NOTE viewFile suppresses ending newline
