@@ -5,16 +5,13 @@ package require tcltest
 ::tcltest::testConstraint skip 0
 ::tcltest::testConstraint noskip 1
 foreach unit {
-    commands_constrain commands_convDateFmt commands_segment commands_stringNormalize
-
     row_to_array row_to_vars count_rows get_column compare_columns handle_empties
 
-    write_table
+    convert_date write_table
 
-    utils_anon utils_cols utils_getFirstLine utils_dbjoin utils_getdiag
-    utils_dayDistance utils_round utils_serialCompareEqual
-    utils_serialCompareEqualDecimal utils_serialCompareEmpty utils_yearDistance
-    utils_getdiag_a
+    utils_anon utils_dbjoin
+    utils_dayDistance utils_serialCompareEqual
+    utils_serialCompareEqualDecimal utils_serialCompareEmpty
     
     result_intersect result_except result_range result_order_by result_select
 
@@ -191,108 +188,20 @@ file copy -force [file join [::tcltest::configure -testdir] eval.csv] [::tcltest
     array unset ::options
 } -result {{{Ann Arbor} Berlin London Luleå {México D.F.} {New Orleans}} {{Ann Arbor} Berlin London London Luleå {México D.F.} {México D.F.} {New Orleans}}}
 
-::tcltest::test commands_constrain-1.0 {constrain:} -constraints {commands_constrain} -setup {
+::tcltest::test convert_date-1.0 {} -constraints {convert_date} -setup {
+    set db [DB new]
+    $db create t1 a b c
+    $db fillTable t1 {1 'foo' '2018-01-28'} {2 'bar' '2018-01-29'}
 } -body {
-    # decl: constrain {varName args}
-    set a 17
-    constrain a -integer 15 20
-    set b 17
-    constrain b -integer 20 25
-    set c 17
-    constrain c -integer 10 15
-    set d 17
-    constrain d -integer 10
-    list $a $b $c $d
+    $db function datecvt {apply {date {
+        set d [clock scan $date -format %Y-%m-%d]
+        clock format $d -format %y-%m-%d
+    }}}
+    $db eval {UPDATE t1 SET c=datecvt(c)}
+    $db eval {SELECT c FROM t1}
 } -cleanup {
-    unset a b c d
-} -result {17 20 15 17}
-
-
-::tcltest::test commands_convDateFmt-1.0 {convDateFmt: defaults} -constraints {commands_convDateFmt} -setup {
-} -body {
-    # decl: convDateFmt {varName args}
-    set a 2013-06-25
-    convDateFmt a
-    set a
-} -cleanup {
-    unset a
-} -result 13-06-25
-
-
-::tcltest::test commands_convDateFmt-1.1 {convDateFmt: defaults} -constraints {commands_convDateFmt} -setup {
-} -body {
-    # decl: convDateFmt {varName args}
-    set a 13-06-25
-    convDateFmt a
-    set a
-} -cleanup {
-    unset a
-} -match glob -result {felaktigt datumformat f*r -from} -returnCodes error
-
-
-::tcltest::test commands_convDateFmt-1.2 {convDateFmt: garbage output} -constraints {commands_convDateFmt} -setup {
-} -body {
-    # decl: convDateFmt {varName args}
-    set a 2013-06-25
-    convDateFmt a -to %f
-    set a
-} -cleanup {
-    unset a
-} -result %f
-
-
-::tcltest::test commands_convDateFmt-1.3 {convDateFmt: } -constraints {commands_convDateFmt} -setup {
-} -body {
-    # decl: convDateFmt {varName args}
-    set a 13-06-25
-    convDateFmt a -from %y-%m-%d -to %Y=%m=%d
-    set a
-} -cleanup {
-    unset a
-} -result 2013=06=25
-
-
-::tcltest::test commands_convDateFmt-1.4 {convDateFmt: } -constraints {commands_convDateFmt} -setup {
-} -body {
-    # decl: convDateFmt {varName args}
-    set a {}
-    convDateFmt a -default foobar
-    set a
-} -cleanup {
-    unset a
-} -result foobar
-
-
-::tcltest::test commands_segment-1.0 {segment:} -constraints {commands_segment} -setup {
-} -body {
-    # decl: segment {varName args}
-    set a 17
-    segment a 15 20
-    set b 17
-    segment b 20 25
-    set c 17
-    segment c 10 15
-    set d 17
-    segment d 10
-    list $a $b $c $d
-} -cleanup {
-    unset a b c d
-} -result {16_20 0_20 16_ 11_}
-
-
-::tcltest::test commands_stringNormalize-1.0 {stringNormalize:} -constraints {commands_stringNormalize} -setup {
-} -body {
-    # decl: stringNormalize {varName {ops trim}}
-    set a { abc def  }
-    stringNormalize a
-    set b { abc def  }
-    stringNormalize b toupper
-    set c { abc def  }
-    stringNormalize c {trim totitle}
-    list $a $b $c
-} -cleanup {
-    unset a b c
-} -result {{abc def} { ABC DEF  } {Abc def}}
+    $db destroy
+} -result {18-01-28 18-01-29}
 
 
 ::tcltest::test row_to_array-1.0 {get:} -constraints {row_to_array} -setup {
@@ -624,214 +533,50 @@ file copy -force [file join [::tcltest::configure -testdir] eval.csv] [::tcltest
 
 
 ::tcltest::test utils_anon-1.0 {anon:} -constraints {utils_anon} -setup {
+    proc anon {table key} {
+        # return a unique integer for each key
+        variable anonkeyarr
+        variable anonkeynum
+        if {[info exists anonkeyarr($table,$key)]} {
+            set anonkeyarr($table,$key)
+        } else {
+            set anonkeyarr($table,$key) [incr anonkeynum]
+        }
+    }
+    set db [DB new]
+    $db create t1 a b
+    $db fillTable t1 {'foo' ''} {'bar' ''} {'foo' ''} {'baz' ''}
+    $db function anonymize {apply {{table key} {anon $table $key}}}
 } -body {
-    # decl: anon args
-    set res {}
-    lappend res [anon 6 2]
-    lappend res [anon 2 6]
-    lappend res [anon 4 4]
-    lappend res [anon 2 6]
-    set res
+    $db eval {UPDATE t1 SET b=anonymize('t1', a)}
+    $db eval {SELECT * FROM t1}
 } -cleanup {
-    unset res
-} -result {1 2 3 2}
-
-
-::tcltest::test utils_cols-1.0 {cols:} -constraints {utils_cols} -setup {
-} -body {
-    # decl: cols {fields headings}
-    cols {c d g} {a b c d e f g h i j}
-} -cleanup {
-} -result {2 3 6}
-
-
-::tcltest::test utils_cols-1.1 {cols:} -constraints {utils_cols} -setup {
-} -body {
-    # decl: cols {fields headings}
-    cols {c d g} {}
-} -cleanup {
-} -match glob -result {ogiltigt f*ltnamn "c"} -returnCodes error
+    $db destroy
+} -result {foo 1 bar 2 foo 1 baz 3}
 
 
 ::tcltest::test utils_dayDistance-1.0 {dayDistance:} -constraints {utils_dayDistance} -setup {
+    set db [DB new]
+    $db create t1 a b
+    $db fillTable t1 {'2018-01-01' ''} {'2018-01-02' ''}
 } -body {
-    # decl: dayDistance {varName date {format %y-%m-%d}}
-    dayDistance 13-06-25 13-06-25
+    $db eval {UPDATE t1 SET b=cast(round(julianday(a)-julianday('2018-01-01')) as int)}
+    $db eval {SELECT b FROM t1}
 } -cleanup {
-} -result 0
+    $db destroy
+} -result {0 1}
 
 
 ::tcltest::test utils_dayDistance-1.1 {dayDistance:} -constraints {utils_dayDistance} -setup {
+    set db [DB new]
+    $db create t1 a b
+    $db fillTable t1 {'2018-01-25' ''} {'2018-02-10' ''}
 } -body {
-    # decl: dayDistance {varName date {format %y-%m-%d}}
-    dayDistance 13-06-25 13-06-30
+    $db eval {UPDATE t1 SET b=cast(round(julianday(a)-julianday('2018-01-01')) as int)}
+    $db eval {SELECT b FROM t1}
 } -cleanup {
-} -result 5
-
-
-::tcltest::test utils_dayDistance-1.2 {dayDistance:} -constraints {utils_dayDistance} -setup {
-} -body {
-    # decl: dayDistance {varName date {format %y-%m-%d}}
-    dayDistance 13-06-25 14-06-25
-} -cleanup {
-} -result 365
-
-
-::tcltest::test utils_dayDistance-1.3 {dayDistance:} -constraints {utils_dayDistance} -setup {
-} -body {
-    # decl: dayDistance {varName date {format %y-%m-%d}}
-    dayDistance 13-06-25 12-06-25
-} -cleanup {
-} -result -365
-
-
-::tcltest::test utils_getFirstLine-1.0 {getFirstLine:} -constraints {utils_getFirstLine} -setup {
-    ::tcltest::makeFile "foo bar\nbaz qux" foo.bar
-} -body {
-    # decl: getFirstLine filename
-    getFirstLine [file join [::tcltest::configure -tmpdir] foo.bar]
-} -cleanup {
-} -result {foo bar}
-
-
-::tcltest::test utils_getdiag-1.0 {getdiag:} -constraints {utils_getdiag} -setup {
-} -body {
-    # decl: getdiag ds
-    getdiag saknas
-} -cleanup {
-} -result saknas
-
-
-::tcltest::test utils_getdiag-1.1 {getdiag:} -constraints {utils_getdiag} -setup {
-} -body {
-    # decl: getdiag ds
-    getdiag z
-} -cleanup {
-} -result z
-
-
-::tcltest::test utils_getdiag-1.2 {getdiag:} -constraints {utils_getdiag} -setup {
-} -body {
-    # decl: getdiag ds
-    getdiag annan
-} -cleanup {
-} -result annan
-
-
-::tcltest::test utils_getdiag-1.3 {getdiag:} -constraints {utils_getdiag} -setup {
-} -body {
-    # decl: getdiag ds
-    getdiag f6
-} -cleanup {
-} -result f6
-
-
-::tcltest::test utils_getdiag-1.4 {getdiag:} -constraints {utils_getdiag} -setup {
-} -body {
-    # decl: getdiag ds
-    getdiag {saknas z}
-} -cleanup {
-} -result z
-
-
-::tcltest::test utils_getdiag-1.5 {getdiag:} -constraints {utils_getdiag} -setup {
-} -body {
-    # decl: getdiag ds
-    getdiag {annan z}
-} -cleanup {
-} -result annan
-
-
-::tcltest::test utils_getdiag-1.6 {getdiag:} -constraints {utils_getdiag} -setup {
-} -body {
-    # decl: getdiag ds
-    getdiag {f6 z}
-} -cleanup {
-} -result f6
-
-
-::tcltest::test utils_getdiag-1.7 {getdiag:} -constraints {utils_getdiag} -setup {
-} -body {
-    # decl: getdiag ds
-    getdiag {saknas annan}
-} -cleanup {
-} -result annan
-
-
-::tcltest::test utils_getdiag-1.8 {getdiag:} -constraints {utils_getdiag} -setup {
-} -body {
-    # decl: getdiag ds
-    getdiag {z annan}
-} -cleanup {
-} -result annan
-
-
-::tcltest::test utils_getdiag-1.9 {getdiag:} -constraints {utils_getdiag} -setup {
-} -body {
-    # decl: getdiag ds
-    getdiag {f6 annan}
-} -cleanup {
-} -result f6
-
-
-::tcltest::test utils_round-1.0 {round:} -constraints {utils_round} -setup {
-} -body {
-    # decl: round {varName sigdig decimals {decimalChar ,}}
-    set x 1.75451658
-    set a [round $x 6 2]
-    set b [round $x 2 6]
-    set c [round $x 4 4 &]
-    list $a $b $c
-} -cleanup {
-    unset x a b c
-} -result {1,75 1,800000 1&7550}
-
-
-::tcltest::test utils_round-1.1 {round:} -constraints {utils_round} -setup {
-} -body {
-    # decl: round {varName sigdig decimals {decimalChar ,}}
-    set x 1754516.58
-    set a [round $x 6 2]
-    set b [round $x 2 6]
-    set c [round $x 4 4 &]
-    list $a $b $c
-} -cleanup {
-    unset x a b c
-} -result {1754520,00 1800000,000000 1755000&0000}
-
-
-::tcltest::test utils_yearDistance-1.0 {yearDistance:} -constraints {utils_yearDistance} -setup {
-} -body {
-    # decl: yearDistance {year0 {year1 {}}}
-    set a [yearDistance 2014 2012]
-    set b [yearDistance 2014 2015]
-    # TODO will have to be changed every year
-    set c [yearDistance 2014]
-    list $a $b $c
-} -cleanup {
-    unset a b c
-} -result {-2 1 4}
-
-
-::tcltest::test utils_getdiag_a-1.0 {getdiag_a:} -constraints {utils_getdiag_a} -setup {
-} -body {
-    getdiag_a {}
-} -cleanup {
-} -result annan
-
-
-::tcltest::test utils_getdiag_a-1.1 {getdiag_a:} -constraints {utils_getdiag_a} -setup {
-} -body {
-    getdiag_a {foo bar baz}
-} -cleanup {
-} -result annan
-
-
-::tcltest::test utils_getdiag_a-1.2 {getdiag_a:} -constraints {utils_getdiag_a} -setup {
-} -body {
-    getdiag_a {foo f7 bar baz}
-} -cleanup {
-} -result f7
+    $db destroy
+} -result {24 40}
 
 
 set STARKITS H:/starkits
@@ -840,19 +585,6 @@ if {![file exists $STARKITS]} {
     set STARKITS [file normalize [file join ~ starkits]]
     set SANDBOX [file normalize [file join ~ code]]
 }
-
-if no {
-set options(-separator) \;
-}
-
-
-if no {
-::Presentation destroy
-foreach file [glob -dir [file join $starkit::topdir _src] *.tcl] {
-    source $file
-}
-}
-
 
 ::tcltest::test result_intersect-1.0 {result_intersect:} -constraints {result_intersect} -setup {
     set r [DB new]
