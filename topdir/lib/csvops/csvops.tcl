@@ -19,9 +19,10 @@ oo::objdefine csvops {
     method exec args {
         set o [OptionHandler new]
         $o option -alternate default 0 flag 1
+        $o option -separator default \;
+        $o option -delimiter default \"
         $o option -rows default :
         $o option -cols default {}
-        $o option -separator default \;
         $o option -oseparator
         $o option -expand default auto
         $o option -fields default {}

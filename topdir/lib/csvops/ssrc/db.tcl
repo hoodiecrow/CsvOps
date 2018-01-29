@@ -185,8 +185,14 @@ oo::class create DB {
 
     method GetRows channel {
         set result {}
+        set splitcmd ::csv::split
+        if {$::options(-alternate)} {
+            lappend splitcmd -alternate
+        }
         while {[gets $channel line] >= 0} {
-            lappend result [my InputFilterRow [::csv::split $line $::options(-separator)]]
+            set data [{*}$splitcmd $line \
+                $::options(-separator) $::options(-delimiter)]
+            lappend result [my InputFilterRow $data]
         }
         return $result
     }
