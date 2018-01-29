@@ -12,8 +12,6 @@ apply {args {
 oo::object create csvops
 
 oo::objdefine csvops {
-    variable data
-
     method exec args {
         set o [OptionHandler new]
         $o option -alternate default 0 flag 1
@@ -32,29 +30,30 @@ oo::objdefine csvops {
         if {[info exists starkit::mode] && $starkit::mode eq "unwrapped"} {
             error deprecated
         } else {
-            try { 
-                if {$filename eq {}} {
-                    format {package require tkcon ; tkcon show}
-                } else {
-                    # TODO see if exit can be dispensed with
-                    cd [file dirname $filename]
-                    format "%s;exit" [::fileutil::cat $filename]
-                }
-            } on ok script { 
-                if {$::options(-safe)} {
-                    lappend preamble {package require fileutil}
-                    lappend preamble {package require log}
-                    # Note: seems impossible to load modules through the tm
-                    # mechanism in a safe base interpreter.
-                    my RunSafe {*}$preamble $script
-                } else {
-                    my RunOpen {*}$preamble $script
-                }
-            } on error {msg opts} { 
-                dict incr opts -level 1
-                # TODO the error message does not change when recasting
-                return -options $opts [mc {Load %s} $msg] 
-            } 
+            if {$filename eq {}} {
+                set script {package require tkcon ; tkcon show}
+            } else {
+                set script [my LoadScript $filename]
+            }
+            if {$::options(-safe)} {
+                lappend preamble {package require fileutil}
+                lappend preamble {package require log}
+                # Note: seems impossible to load modules through the tm
+                # mechanism in a safe base interpreter.
+                my RunSafe {*}$preamble $script
+            } else {
+                my RunOpen {*}$preamble $script
+            }
+        }
+    }
+
+    method LoadScript filename {
+        # TODO see if exit can be dispensed with
+        try {
+            cd [file dirname $filename]
+            format "%s;exit" [::fileutil::cat $filename]
+        } on error msg {
+            my Panic [mc {Load %s} $msg]
         }
     }
 
@@ -70,8 +69,18 @@ oo::objdefine csvops {
         foreach arg [lrange $args 0 end-1] {
             $int eval $arg
         }
-        $int eval [list try [lindex $args end] on error msg {error [mc {Failure %s} $msg]}]
-        ::safe::interpDelete $int
+        try {
+            $int eval [lindex $args end] 
+        } on error msg {
+            my Panic [mc {Failure %s} $msg]
+        } finally {
+            ::safe::interpDelete $int
+        }
+    }
+
+    method Panic msg {
+        puts stderr $msg
+        exit
     }
 
 }
