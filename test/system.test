@@ -29,14 +29,22 @@ set FOO_CO [file join [::tcltest::configure -tmpdir] foo.co]
 } -result {}
 
 
-::tcltest::test system-1.1 {} -constraints {TODO system} -setup {
+::tcltest::test system-1.1 {} -constraints {system} -setup {
 } -body {
     {*}$EXEC foo:bar
 } -cleanup {
-} -match glob -result {Cannot read file "foo:bar", does not exist*} -returnCodes error
+} -result {Skriptet kunde inte laddas: Cannot read file "foo:bar", does not exist} -returnCodes error
 
 
 ::tcltest::test system-1.2 {} -constraints {system} -setup {
+    ::tcltest::makeFile {expr {1/0}} foo.co
+} -body {
+    {*}$EXEC $FOO_CO
+} -cleanup {
+} -result {Bearbetningen misslyckades: divide by zero} -returnCodes error
+
+
+::tcltest::test system-1.3 {} -constraints {system} -setup {
     ::tcltest::makeFile {puts "I'm foo"} foo.co
 } -body {
     {*}$EXEC $FOO_CO
@@ -57,10 +65,11 @@ set FOO_CO [file join [::tcltest::configure -tmpdir] foo.co]
     ::tcltest::viewFile foo.out
 } -cleanup {
     log::lvSuppressLE i 1
-} -result {{-alternate 0} {-cols {}} {-convert-decimal {read write}} {-expand auto} {-fields {}} {-oseparator {;}} {-rows :} {-safe 1} {-separator {;}}}
+} -result {{-alternate 0} {-convert-decimal {read write}} {-delimiter {"}} {-oseparator {;}} {-safe 1} {-separator {;}}}
 
+# "
 
-::tcltest::test system-2.1 {options: all} -constraints {system} -setup {
+::tcltest::test system-2.1 {options: abbreviated} -constraints {system} -setup {
     ::tcltest::makeFile {
         ::fileutil::writeFile foo.out [lmap opt [lsort [array names ::options]] {
             list $opt $::options($opt)
@@ -68,38 +77,10 @@ set FOO_CO [file join [::tcltest::configure -tmpdir] foo.co]
     } foo.co
     ::tcltest::makeFile {} foo.out
 } -body {
-    {*}$EXEC -alternate -cols ab -expand empty -fields cd -rows ef -separator gh $FOO_CO
+    {*}$EXEC -a -c read -d ' -se , -os : -sa $FOO_CO
     ::tcltest::viewFile foo.out
 } -cleanup {
-} -result {{-alternate 1} {-cols ab} {-convert-decimal {read write}} {-expand empty} {-fields cd} {-oseparator gh} {-rows ef} {-safe 1} {-separator gh}}
-
-
-::tcltest::test system-2.2 {options: abbreviated} -constraints {system} -setup {
-    ::tcltest::makeFile {
-        ::fileutil::writeFile foo.out [lmap opt [lsort [array names ::options]] {
-            list $opt $::options($opt)
-        }]
-    } foo.co
-    ::tcltest::makeFile {} foo.out
-} -body {
-    {*}$EXEC -e n $FOO_CO
-    ::tcltest::viewFile foo.out
-} -cleanup {
-} -result {{-alternate 0} {-cols {}} {-convert-decimal {read write}} {-expand none} {-fields {}} {-oseparator {;}} {-rows :} {-safe 1} {-separator {;}}}
-
-
-::tcltest::test system-2.3 {options: -expand unknown value} -constraints {TODO system} -setup {
-    ::tcltest::makeFile {
-        ::fileutil::writeFile foo.out [lmap opt [lsort [array names ::options]] {
-            list $opt $::options($opt)
-        }]
-    } foo.co
-    ::tcltest::makeFile {} foo.out
-} -body {
-    {*}$EXEC -e z $FOO_CO
-    ::tcltest::viewFile foo.out
-} -cleanup {
-} -match glob -result {ogiltig expansionstyp "z", b?r vara auto, empty eller none*} -returnCodes error
+} -result {{-alternate 1} {-convert-decimal read} {-delimiter '} {-oseparator :} {-safe 1} {-separator ,}}
 
 
 ::tcltest::test system-3.0 {copy database} -constraints {system} -setup {
@@ -111,9 +92,10 @@ set FOO_CO [file join [::tcltest::configure -tmpdir] foo.co]
         s dumpTable -values t1 foobar.csv
     } foo.co
 } -body {
-    {*}$EXEC -sep , -convert-decimal read $FOO_CO
+    {*}$EXEC -sep , -no-safe -convert-decimal read $FOO_CO
     ::tcltest::viewFile foobar.csv
 } -cleanup {
+    log::lvSuppressLE i 1
 } -result {023,EVAL cmd eval in list obj var,26,45,57.78
 024,EVAL cmd eval as list,23,42,54.76
 025,EVAL cmd eval as string,53,92,57.61

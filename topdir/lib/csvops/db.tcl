@@ -1,6 +1,4 @@
 
-if {[llength [info commands ::DB]] > 0} return
-
 package require csv
 package require tdom
 
@@ -49,7 +47,6 @@ oo::class create DB {
 
     method insert {tableid args} {
         log::logMsg [info level 0]
-        #error [info level 0]
         # Insert a row into a table given table name, optionally a list of
         # column names, and a list of values.
         set argc [llength $args]
@@ -61,7 +58,7 @@ oo::class create DB {
             }
             2 {dbcmd eval [format {INSERT INTO %s (%s) VALUES (%s)} $tableid $columns $values]}
             default {
-                return -code error [mc {wrong number of arguments, should be "insert tableid ?columns? values"}]
+                return -code error [mc {wrong#number "%s"} {insert tableid ?columns? values}]
             }
         }
     }
@@ -185,8 +182,16 @@ oo::class create DB {
 
     method GetRows channel {
         set result {}
+        set splitcmd ::csv::split
+        if {$::options(-alternate)} {
+            lappend splitcmd -alternate
+        }
+            log::logMsg \$splitcmd=$splitcmd
         while {[gets $channel line] >= 0} {
-            lappend result [my InputFilterRow [::csv::split $line $::options(-separator)]]
+            set data [{*}$splitcmd $line \
+                $::options(-separator) $::options(-delimiter)]
+            log::logMsg \$data=$data
+            lappend result [my InputFilterRow $data]
         }
         return $result
     }

@@ -5,7 +5,7 @@
 
 namespace eval ::safe {
 
-    # code scavenged from the 'safe' package; I've left logging in
+    # code scavenged from the 'safe' package
 
     proc AliasOpen {slave filename {access r}} {
         # safe open. access is limited to [rw][+b]
@@ -14,7 +14,6 @@ namespace eval ::safe {
         set realfile [try {
             TranslatePath $slave $filename
         } on error msg {
-            Log $slave $msg
             return -code error [mc {permission denied}]
         }]
         
@@ -23,7 +22,6 @@ namespace eval ::safe {
             try {
                 CheckFileName $slave $realfile
             } on error msg {
-                Log $slave "$realfile: $msg"
                 return -code error [mc $msg]
             }
         } else {
@@ -31,7 +29,6 @@ namespace eval ::safe {
             set path [file normalize [file dirname $realfile]]
             set curr [file normalize .]
             if {$path ne $curr} {
-                Log $slave "\"$filename\": not in current directory"
                 return -code error [mc {permission denied}]
             }
         }
@@ -42,7 +39,6 @@ namespace eval ::safe {
             interp transfer {} $chan $slave
             set chan
         } on error {} {
-            Log $slave "\"$filename\": can't open"
             return -code error [mc {permission denied}]
         }
     }
@@ -52,7 +48,6 @@ namespace eval ::safe {
         set realpath [try  {
             TranslatePath $slave $path
         } on error msg {
-             Log $slave $msg
             return -code error [mc {permission denied}]
         }]
         interp invokehidden $slave tcl:file:$subcmd $realpath
