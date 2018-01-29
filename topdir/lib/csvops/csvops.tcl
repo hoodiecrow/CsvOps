@@ -70,10 +70,9 @@ oo::objdefine csvops {
         foreach file [glob -nocomplain -directory $dir *.tcl] {
             uplevel #0 [list source -encoding utf-8 $file]
         }
-        foreach arg [lrange $args 0 end-1] {
+        foreach arg $args {
             uplevel #0 $arg
         }
-        uplevel #0 [list try [lindex $args end] on error msg {error [mc {Failure %s} $msg]}]
     }
 
     method RunSafe args {

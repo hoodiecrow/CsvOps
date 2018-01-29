@@ -111,7 +111,7 @@ set FOO_CO [file join [::tcltest::configure -tmpdir] foo.co]
         s dumpTable -values t1 foobar.csv
     } foo.co
 } -body {
-    {*}$EXEC -sep , -convert-decimal read $FOO_CO
+    {*}$EXEC -sep , -no-safe -convert-decimal read $FOO_CO
     ::tcltest::viewFile foobar.csv
 } -cleanup {
     log::lvSuppressLE i 1
