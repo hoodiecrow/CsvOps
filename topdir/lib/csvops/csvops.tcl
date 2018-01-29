@@ -21,23 +21,18 @@ oo::objdefine csvops {
         $o option -alternate default 0 flag 1
         $o option -separator default \;
         $o option -delimiter default \"
-        $o option -rows default :
-        $o option -cols default {}
         $o option -oseparator
-        $o option -expand default auto
-        $o option -fields default {}
         $o option -safe flag 1 default 1
         $o option -convert-decimal default {read write}
 
         lassign [$o extract ::options {*}$args] filename
-        $o expand -expand {auto empty none}
         $o defaultTo -oseparator -separator
 
+        log::logMsg [array get ::options]
         set preamble {}
 
         if {[info exists starkit::mode] && $starkit::mode eq "unwrapped"} {
             error deprecated
-            my RunDebug {*}$preamble {vwait forever}
         } else {
             try { 
                 if {$filename eq {}} {

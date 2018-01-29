@@ -57,38 +57,11 @@ set FOO_CO [file join [::tcltest::configure -tmpdir] foo.co]
     ::tcltest::viewFile foo.out
 } -cleanup {
     log::lvSuppressLE i 1
-} -result {{-alternate 0} {-cols {}} {-convert-decimal {read write}} {-delimiter {"}} {-expand auto} {-fields {}} {-oseparator {;}} {-rows :} {-safe 1} {-separator {;}}}
-
-
-::tcltest::test system-2.1 {options: all} -constraints {system} -setup {
-    ::tcltest::makeFile {
-        ::fileutil::writeFile foo.out [lmap opt [lsort [array names ::options]] {
-            list $opt $::options($opt)
-        }]
-    } foo.co
-    ::tcltest::makeFile {} foo.out
-} -body {
-    {*}$EXEC -alternate -cols ab -expand empty -fields cd -rows ef -separator gh $FOO_CO
-    ::tcltest::viewFile foo.out
-} -cleanup {
-} -result {{-alternate 1} {-cols ab} {-convert-decimal {read write}} {-delimiter {"}} {-expand empty} {-fields cd} {-oseparator gh} {-rows ef} {-safe 1} {-separator gh}}
-
-
-::tcltest::test system-2.2 {options: abbreviated} -constraints {system} -setup {
-    ::tcltest::makeFile {
-        ::fileutil::writeFile foo.out [lmap opt [lsort [array names ::options]] {
-            list $opt $::options($opt)
-        }]
-    } foo.co
-    ::tcltest::makeFile {} foo.out
-} -body {
-    {*}$EXEC -e n $FOO_CO
-    ::tcltest::viewFile foo.out
-} -cleanup {
-} -result {{-alternate 0} {-cols {}} {-convert-decimal {read write}} {-delimiter {"}} {-expand none} {-fields {}} {-oseparator {;}} {-rows :} {-safe 1} {-separator {;}}}
+} -result {{-alternate 0} {-convert-decimal {read write}} {-delimiter {"}} {-oseparator {;}} {-safe 1} {-separator {;}}}
 
 # "
-::tcltest::test system-2.3 {options: -expand unknown value} -constraints {TODO system} -setup {
+
+::tcltest::test system-2.1 {options: abbreviated} -constraints {system} -setup {
     ::tcltest::makeFile {
         ::fileutil::writeFile foo.out [lmap opt [lsort [array names ::options]] {
             list $opt $::options($opt)
@@ -96,10 +69,10 @@ set FOO_CO [file join [::tcltest::configure -tmpdir] foo.co]
     } foo.co
     ::tcltest::makeFile {} foo.out
 } -body {
-    {*}$EXEC -e z $FOO_CO
+    {*}$EXEC -a -c read -d ' -se , -os : -sa $FOO_CO
     ::tcltest::viewFile foo.out
 } -cleanup {
-} -match glob -result {ogiltig expansionstyp "z", b?r vara auto, empty eller none*} -returnCodes error
+} -result {{-alternate 1} {-convert-decimal read} {-delimiter '} {-oseparator :} {-safe 1} {-separator ,}}
 
 
 ::tcltest::test system-3.0 {copy database} -constraints {system} -setup {
