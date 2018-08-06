@@ -1,0 +1,63 @@
+package require tcltest
+namespace import ::tcltest::*
+
+configure {*}$argv
+
+loadTestedCommands
+
+package require csvops
+
+array set options {
+    -alternate 0
+    -separator \;
+    -delimiter \"
+    -convert-decimal {read write}
+}
+
+makeFile "2;a\n11;a\n1;b\n2;b\n11;A\n1;A" a.csv
+
+test result_order_by-1.0 {result_order_by: (force text sorting)} -setup {
+    set r [DB new]
+    $r create t1 {a text} b
+    $r loadTable t1 [file join [configure -tmpdir] a.csv]
+} -body {
+    dict values [$r dict {SELECT * FROM t1 ORDER BY b COLLATE NOCASE ASC, a}]
+} -cleanup {
+    $r destroy
+    log::lvSuppressLE i 1
+} -result {{a b} {1 A} {11 a} {11 A} {2 a} {1 b} {2 b}}
+
+
+test result_order_by-1.1 {result_order_by:} -setup {
+    set r [DB new]
+    $r create t1 a b
+    $r loadTable t1 [file join [configure -tmpdir] a.csv]
+} -body {
+    dict values [$r dict {SELECT * FROM t1 ORDER BY b COLLATE NOCASE ASC, a}]
+} -cleanup {
+    $r destroy
+} -result {{a b} {1 A} {2 a} {11 a} {11 A} {1 b} {2 b}}
+
+
+test result_order_by-1.2 {result_order_by: (force text sorting)} -setup {
+    set r [DB new]
+    $r create t1 {a text} b
+    $r loadTable t1 [file join [configure -tmpdir] a.csv]
+} -body {
+    dict values [$r dict {SELECT * FROM t1 ORDER BY b, a}]
+} -cleanup {
+    $r destroy
+} -result {{a b} {1 A} {11 A} {11 a} {2 a} {1 b} {2 b}}
+
+
+test result_order_by-1.3 {result_order_by:} -setup {
+    set r [DB new]
+    $r create t1 a b
+    $r loadTable t1 [file join [configure -tmpdir] a.csv]
+} -body {
+    dict values [$r dict {SELECT * FROM t1 ORDER BY b, a}]
+} -cleanup {
+    $r destroy
+} -result {{a b} {1 A} {11 A} {2 a} {11 a} {1 b} {2 b}}
+
+cleanupTests

@@ -1,0 +1,141 @@
+package require tcltest
+namespace import ::tcltest::*
+
+configure {*}$argv
+
+loadTestedCommands
+
+package require csvops
+
+set ::options(-alternate) 0
+set ::options(-separator) \;
+set ::options(-delimiter) \"
+set ::options(-convert-decimal) {read write}
+
+makeFile "1;a;\n2;b;29\n3;c;23" foobar.csv
+makeFile "1;a;83\n2;b;29\n4;c;" bazqux.csv
+makeFile "1;a;;1,67\n2;b;29;2,05\n3;c;23;3" foobar2.csv
+makeFile "1;a;83;0,68\n2;b;29;4,12\n4;c;;1,05" bazqux2.csv
+makeFile "1;a;;1,67\n2;b;29;2,05\n3;c;23;1,0500" foobar3.csv
+makeFile "1;a;83;0,68\n2;b;29;4,12\n4;c;;1,05" bazqux3.csv
+
+test compare_columns-2.0 {getColumn: compare columns for equality} -setup {
+    set r [DB new]
+    $r create t1 foo bar baz
+    $r loadTable t1 [file join [configure -tmpdir] foobar.csv]
+    $r create t2 foo bar baz
+    $r loadTable t2 [file join [configure -tmpdir] bazqux.csv]
+} -body {
+    set C [$r eval {SELECT foo FROM t1}]
+    set D [$r eval {SELECT foo FROM t2}]
+    set E [$r eval {SELECT bar FROM t1}]
+    set F [$r eval {SELECT bar FROM t2}]
+    list [expr {$C == $D}] [expr {$E == $F}]
+} -cleanup {
+    $r destroy
+    unset C D E F
+} -result {0 1}
+
+
+test compare_columns-2.1 {getColumn: compare columns for numeric difference} -setup {
+    set r [DB new]
+    $r create t1 foo bar baz
+    $r loadTable t1 [file join [configure -tmpdir] foobar.csv]
+    $r create t2 foo bar baz
+    $r loadTable t2 [file join [configure -tmpdir] bazqux.csv]
+} -body {
+    set C [$r eval {SELECT foo FROM t1}]
+    set D [$r eval {SELECT foo FROM t2}]
+    set s1 [::tcl::mathop::+ {*}$C]
+    set s2 [::tcl::mathop::+ {*}$D]
+    expr {$s2 - $s1}
+} -cleanup {
+    $r destroy
+    unset C D s1 s2
+} -result 1
+
+
+test compare_columns-2.2 {getColumn: compare columns for numeric difference, with empty cells} -setup {
+    set r [DB new]
+    $r create t1 foo bar baz
+    $r loadTable t1 [file join [configure -tmpdir] foobar.csv]
+    $r create t2 foo bar baz
+    $r loadTable t2 [file join [configure -tmpdir] bazqux.csv]
+} -body {
+    set s1 [$r eval {SELECT SUM(baz) FROM t1}]
+    set s2 [$r eval {SELECT SUM(baz) FROM t2}]
+    expr {int($s1 - $s2)}
+} -cleanup {
+    $r destroy
+    unset s1 s2
+} -result -60
+
+
+test compare_columns-2.3 {getColumn: compare columns for numeric difference, decimal numbers} -setup {
+    set r [DB new]
+    $r create t1 foo bar baz qux
+    $r loadTable t1 [file join [configure -tmpdir] foobar2.csv]
+    $r create t2 foo bar baz qux
+    $r loadTable t2 [file join [configure -tmpdir] bazqux2.csv]
+} -body {
+    set s1 [$r eval {SELECT SUM(qux) FROM t1}]
+    set s2 [$r eval {SELECT SUM(qux) FROM t2}]
+    expr {$s1 - $s2}
+} -cleanup {
+    $r destroy
+    unset s1 s2
+} -result 0.8700000000000001
+
+
+test compare_columns-2.4 {getColumn: serial comparison for equality -- integer} -setup {
+    set r [DB new]
+    $r create t1 foo bar baz qux
+    $r loadTable t1 [file join [configure -tmpdir] foobar2.csv]
+    $r create t2 foo bar baz qux
+    $r loadTable t2 [file join [configure -tmpdir] bazqux2.csv]
+} -body {
+    lmap s1 [$r eval {SELECT foo FROM t1}] s2 [$r eval {SELECT foo FROM t2}] {
+        expr {$s1 eq $s2}
+    }
+} -cleanup {
+    $r destroy
+    unset s1 s2
+} -result {1 1 0}
+
+
+test compare_columns-2.5 {getColumn: serial comparison for equality -- string} -setup {
+    set r [DB new]
+    $r create t1 foo bar baz qux
+    $r loadTable t1 [file join [configure -tmpdir] foobar2.csv]
+    $r create t2 foo bar baz qux
+    $r loadTable t2 [file join [configure -tmpdir] bazqux2.csv]
+} -body {
+    lmap s1 [$r eval {SELECT bar FROM t1}] s2 [$r eval {SELECT bar FROM t2}] {
+        expr {$s1 eq $s2}
+    }
+} -cleanup {
+    $r destroy
+    unset s1 s2
+} -result {1 1 1}
+
+
+test compare_columns-2.6 {getColumn: serial comparison for equality -- decimal} -setup {
+    set r [DB new]
+    $r create t1 foo bar baz qux
+    $r loadTable t1 [file join [configure -tmpdir] foobar3.csv]
+    $r create t2 foo bar baz qux
+    $r loadTable t2 [file join [configure -tmpdir] bazqux3.csv]
+} -body {
+    lmap s1 [$r eval {SELECT qux FROM t1}] s2 [$r eval {SELECT qux FROM t2}] {
+        expr {$s1 eq $s2}
+    }
+} -cleanup {
+    $r destroy
+    unset s1 s2
+} -result {0 0 1}
+
+foreach file {foobar bazqux foobar2 bazqux2 foobar3 bazqux3} {
+    file delete [file join [::tcltest::configure -tmpdir] $file.csv]
+}
+
+cleanupTests

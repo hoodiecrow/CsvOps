@@ -1,0 +1,44 @@
+package require tcltest
+namespace import ::tcltest::*
+
+configure {*}$argv
+
+loadTestedCommands
+
+#source [file join H:/starkits csvops.kit]
+
+set ::argv {} ; package require csvops
+
+test result_range-1.0 {result_range:} -setup {
+    set r [DB new]
+    $r create t1 a b
+    $r fillTable t1 {1 2} {3 4} {5 6} {7 8} {9 0} {2 1} {4 3} {6 5} {8 7} {0 9}
+} -body {
+    lrange [dict values [$r dict {SELECT * FROM t1 LIMIT 3}]] 1 end
+} -cleanup {
+    $r destroy
+} -result {{1 2} {3 4} {5 6}}
+
+
+test result_range-1.1 {result_range:} -setup {
+    set r [DB new]
+    $r create t1 a b
+    $r fillTable t1 {1 2} {3 4} {5 6} {7 8} {9 0} {2 1} {4 3} {6 5} {8 7} {0 9}
+} -body {
+    lrange [dict values [$r dict {SELECT * FROM t1 LIMIT 4, 4}]] 1 end
+} -cleanup {
+    $r destroy
+} -result {{9 0} {2 1} {4 3} {6 5}}
+
+
+test result_range-1.2 {result_range:} -setup {
+    set r [DB new]
+    $r create t1 a b
+    $r fillTable t1 {1 2} {3 4} {5 6} {7 8} {9 0} {2 1} {4 3} {6 5} {8 7} {0 9}
+} -body {
+    lrange [dict values [$r dict {SELECT * FROM t1 LIMIT 2, 99999999}]] 1 end
+} -cleanup {
+    $r destroy
+} -result {{5 6} {7 8} {9 0} {2 1} {4 3} {6 5} {8 7} {0 9}}
+
+cleanupTests

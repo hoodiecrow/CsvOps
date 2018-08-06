@@ -1,0 +1,324 @@
+package require tcltest
+namespace import ::tcltest::*
+
+configure {*}$argv
+
+testConstraint noskip 1
+foreach unit {
+    row_to_array row_to_vars count_rows get_column handle_empties
+
+    convert_date write_table
+
+    utils_anon utils_dayDistance
+    
+    result_intersect result_except
+
+    presentation_tally dump_html 
+} {
+    testConstraint $unit 1
+}
+
+loadTestedCommands
+
+#source [file join H:/starkits csvops.kit]
+
+set ::argv {} ; package require csvops
+
+file copy -force [file join [configure -testdir] eval.csv] [configure -tmpdir]
+
+# NOTE viewFile suppresses ending newline
+
+array set options {
+    -alternate 0
+    -separator \;
+    -delimiter \"
+    -convert-decimal {read write}
+}
+
+test convert_date-1.0 {} -constraints {convert_date} -setup {
+    set db [DB new]
+    $db create t1 a b c
+    $db fillTable t1 {1 'foo' '2018-01-28'} {2 'bar' '2018-01-29'}
+} -body {
+    $db function datecvt {apply {date {
+        set d [clock scan $date -format %Y-%m-%d]
+        clock format $d -format %y-%m-%d
+    }}}
+    $db eval {UPDATE t1 SET c=datecvt(c)}
+    $db eval {SELECT c FROM t1}
+} -cleanup {
+    $db destroy
+} -result {18-01-28 18-01-29}
+
+
+test row_to_array-1.0 {get:} -constraints {row_to_array} -setup {
+    makeFile "1;a;\n2;b;29\n3;c;23" foobar.csv
+    set r [DB new]
+    $r create t1 foo bar baz
+    $r loadTable t1 [file join [configure -tmpdir] foobar.csv]
+} -body {
+    $r eval {SELECT * FROM t1 LIMIT 0,1} F continue
+    $r eval {SELECT * FROM t1 LIMIT 1,1} G continue
+    list $F(foo) $G(foo)
+} -cleanup {
+    $r destroy
+    unset F
+} -result {1 2}
+
+
+test loadTable-1.0 {get:} -constraints {} -setup {
+    array set _options [array get ::options]
+    set ::options(-separator) ,
+    set ::options(-oseparator) ,
+    set ::options(-convert-decimal) read
+    makeFile {} foobar.csv
+    set r [DB new]
+    $r create t1 a b c d e
+} -body {
+    $r loadTable t1 [file join [configure -tmpdir] eval.csv]
+    $r dumpTable -values t1 [file join [configure -tmpdir] foobar.csv]
+    viewFile foobar.csv
+} -cleanup {
+    $r destroy
+    array set ::options [array get _options]
+    log::lvSuppressLE i 1
+} -result {023,EVAL cmd eval in list obj var,26,45,57.78
+024,EVAL cmd eval as list,23,42,54.76
+025,EVAL cmd eval as string,53,92,57.61
+026,EVAL cmd and mixed lists,3805,11276,33.74
+027,EVAL list cmd and mixed lists,3812,11325,33.66
+028,EVAL list cmd and pure lists,592,1598,37.05}
+
+
+test row_to_vars-1.1 {get:} -constraints {noskip row_to_vars} -setup {
+    set p [DB new]
+    $p create t1 a b c d
+    $p fillTable t1 {1 2 3 4} {5 6 7 8}
+    set res {}
+} -body {
+    $p eval {SELECT * FROM t1} {
+        lappend res $c
+    }
+    set res
+} -cleanup {
+    $p destroy
+} -result {3 7}
+
+
+test count_rows-1.0 {rows:} -constraints {noskip count_rows} -setup {
+    set r [DB new]
+    $r create t1 a b c d
+    $r fillTable t1 {1 2 3 4} {5 6 7 8}
+} -body {
+    $r eval {SELECT COUNT(*) FROM t1}
+} -cleanup {
+    $r destroy
+} -result 2
+
+
+test get_column-1.0 {getColumn:} -constraints {noskip get_column} -setup {
+    set p [DB new]
+    $p create t1 a b c d
+    $p fillTable t1 {1 2 3 4} {5 6 7 8}
+} -body {
+    $p eval {SELECT c FROM t1}
+} -cleanup {
+    $p destroy
+} -result {3 7}
+
+
+test handle_empties-1.0 {getColumnValues: skip nulls} -constraints {noskip handle_empties} -setup {
+    set p [DB new]
+    $p create t1 a b c d
+    $p fillTable t1 {1 2 3 4} {5 6 '' 8}
+} -body {
+    lmap val [$p eval {SELECT c FROM t1}] {if {$val ne {}} {set val} continue}
+} -cleanup {
+    $p destroy
+    log::lvSuppressLE i 1
+} -result 3
+
+
+test handle_empties-1.1 {getColumnValues: set nulls to 0} -constraints {noskip handle_empties} -setup {
+    makeFile "1;2;3;4\n5;6;;8" empties.csv
+    set p [DB new]
+    $p create t1 a b c d
+    $p loadTable t1 [file join [configure -tmpdir] empties.csv]
+} -body {
+    lmap val [$p eval {SELECT c FROM t1}] {if {$val ne {}} {set val} {expr 0}}
+} -cleanup {
+    $p destroy
+} -result {3 0}
+
+
+test presentation_tally-1.0 {tally:} -constraints {presentation_tally} -setup {
+    set d [DB new]
+    $d create t1 a b c
+} -body {
+    $d tally a
+    $d tally b
+    $d tally c
+    $d insert t1 [$d tally]
+    $d dict {SELECT * FROM t1}
+} -cleanup {
+    $d destroy
+} -result {* {a b c} 1 {1 1 1}}
+
+
+test presentation_tally-1.1 {tally:} -constraints {presentation_tally} -setup {
+    set d [DB new]
+    $d create t1 foo bar baz
+} -body {
+    $d tally foo
+    $d tally foo
+    $d tally foo
+    $d tally bar
+    $d tally bar
+    $d tally baz
+    $d insert t1 [$d tally]
+    $d dict {SELECT * FROM t1}
+} -cleanup {
+    $d destroy
+} -result {* {foo bar baz} 1 {3 2 1}}
+
+
+test dump_html-1.0 {} -constraints {dump_html} -setup {
+    set d [DB new]
+    $d create t1 a b c
+    $d fillTable t1 {45 89 23} {89 37 82}
+} -body {
+    $d html t1 Foobar
+} -cleanup {
+    $d destroy
+} -result {<table>
+<caption>Foobar</caption><tr>
+<th></th><th>a</th><th>b</th><th>c</th>
+</tr><tr>
+<th>1</th><td>45</td><td>89</td><td>23</td>
+</tr><tr>
+<th>2</th><td>89</td><td>37</td><td>82</td>
+</tr>
+</table>}
+
+
+test utils_anon-1.0 {anon:} -constraints {utils_anon} -setup {
+    proc anon {table key} {
+        # return a unique integer for each key
+        variable anonkeyarr
+        variable anonkeynum
+        if {[info exists anonkeyarr($table,$key)]} {
+            set anonkeyarr($table,$key)
+        } else {
+            set anonkeyarr($table,$key) [incr anonkeynum]
+        }
+    }
+    set db [DB new]
+    $db create t1 a b
+    $db fillTable t1 {'foo' ''} {'bar' ''} {'foo' ''} {'baz' ''}
+    $db function anonymize {apply {{table key} {anon $table $key}}}
+} -body {
+    $db eval {UPDATE t1 SET b=anonymize('t1', a)}
+    $db eval {SELECT * FROM t1}
+} -cleanup {
+    $db destroy
+} -result {foo 1 bar 2 foo 1 baz 3}
+
+
+test utils_dayDistance-1.0 {dayDistance:} -constraints {utils_dayDistance} -setup {
+    set db [DB new]
+    $db create t1 a b
+    $db fillTable t1 {'2018-01-01' ''} {'2018-01-02' ''}
+} -body {
+    $db eval {UPDATE t1 SET b=cast(round(julianday(a)-julianday('2018-01-01')) as int)}
+    $db eval {SELECT b FROM t1}
+} -cleanup {
+    $db destroy
+} -result {0 1}
+
+
+test utils_dayDistance-1.1 {dayDistance:} -constraints {utils_dayDistance} -setup {
+    set db [DB new]
+    $db create t1 a b
+    $db fillTable t1 {'2018-01-25' ''} {'2018-02-10' ''}
+} -body {
+    $db eval {UPDATE t1 SET b=cast(round(julianday(a)-julianday('2018-01-01')) as int)}
+    $db eval {SELECT b FROM t1}
+} -cleanup {
+    $db destroy
+} -result {24 40}
+
+
+test result_intersect-1.0 {result_intersect:} -constraints {result_intersect} -setup {
+    set r [DB new]
+    $r create t1 a b c
+    $r fillTable t1 {1 2 3} {2 3 1} {3 1 2} {3 1 2}
+    $r create t2 a b c
+    $r fillTable t2 {4 5 6} {5 6 4} {4 5 6}
+} -body {
+    dict values [$r dict {SELECT * FROM t1 INTERSECT SELECT * FROM t2}]
+} -cleanup {
+    $r destroy
+} -result {}
+
+
+test result_intersect-1.1 {result_intersect:} -constraints {result_intersect} -setup {
+    set r [DB new]
+    $r create t1 a b c
+    $r fillTable t1 {1 2 3} {2 3 1} {3 1 2} {3 1 2}
+    $r create t2 a b c
+    $r fillTable t2 {2 3 1} {2 3 1} {3 2 1}
+} -body {
+    dict values [$r dict {SELECT * FROM t1 INTERSECT SELECT * FROM t2}]
+} -cleanup {
+    $r destroy
+} -result {{a b c} {2 3 1}}
+
+
+test result_except-1.0 {result_except:} -constraints {result_except} -setup {
+    set r [DB new]
+    $r create t1 a b c
+    $r fillTable t1 {1 2 3} {2 3 1} {3 1 2} {3 1 2}
+    $r create t2 a b c
+    $r fillTable t2 {4 5 6} {5 6 4} {4 5 6}
+} -body {
+    dict values [$r dict {SELECT * FROM t1 EXCEPT SELECT * FROM t2}]
+} -cleanup {
+    $r destroy
+} -result {{a b c} {1 2 3} {2 3 1} {3 1 2}}
+
+
+test result_except-1.1 {result_except:} -constraints {result_except} -setup {
+    set r [DB new]
+    $r create t1 a b c
+    $r fillTable t1 {1 2 3} {2 3 1} {3 1 2} {3 1 2}
+    $r create t2 a b c
+    $r fillTable t2 {2 3 1} {2 3 1} {3 2 1}
+} -body {
+    dict values [$r dict {SELECT * FROM t1 EXCEPT SELECT * FROM t2}]
+} -cleanup {
+    $r destroy
+} -result {{a b c} {1 2 3} {3 1 2}}
+
+
+test write_table-1.0 {write_table} -constraints write_table -setup {
+    array set _options [array get ::options]
+    set ::options(-oseparator) \;
+    makeFile "0;foo\n1;snarf\n2;blue" a.csv
+    set r [DB new]
+    $r create t1 foo bar
+    $r loadTable t1 [file join [configure -tmpdir] a.csv]
+    makeFile {} output.csv
+} -body {
+    $r dumpTable t1 [file join [configure -tmpdir] output.csv]
+    viewFile output.csv
+} -cleanup {
+    $r destroy
+    array set ::options [array get _options]
+    log::lvSuppressLE i 1
+} -result {foo;bar
+0;foo
+1;snarf
+2;blue}
+
+
+cleanupTests

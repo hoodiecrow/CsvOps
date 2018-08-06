@@ -1,0 +1,133 @@
+package require tcltest
+namespace import ::tcltest::*
+
+configure {*}$argv
+
+loadTestedCommands
+
+package require csvops
+
+array set options {
+    -alternate 0
+    -separator \;
+    -delimiter \"
+    -convert-decimal {read write}
+}
+
+# Interface to sql
+test sql-methods-1.0 {} -setup {
+    makeFile "foo;bar;baz\n0;foo;ab\n1;snarf;cd\n2;blue;ef" a.csv
+    set db [DB new]
+    $db readTable t1 [file join [configure -tmpdir] a.csv]
+    set res {}
+} -body {
+    # SELECT * FROM t1;
+    lappend res [$db select t1]
+    # SELECT foo, bar FROM t1;
+    lappend res [$db select t1 foo bar]
+    set res
+} -cleanup {
+    $db destroy
+    log::lvSuppressLE i 1
+} -result {{0 foo ab 1 snarf cd 2 blue ef} {0 foo 1 snarf 2 blue}}
+
+# db borrowed from https://www.w3schools.com/sql
+makeFile [join [list \
+{CustomerID;CustomerName;ContactName;Address;City;PostalCode;Country} \
+{1;Alfreds Futterkiste;Maria Anders;Obere Str. 57;Berlin;12209;Germany} \
+{2;Ana Trujillo Emparedados y helados;Ana Trujillo;Avda. de la Constitución 2222;México D.F.;05021;Mexico} \
+{3;Antonio Moreno Taquería;Antonio Moreno;Mataderos 2312;México D.F.;05023;Mexico} \
+{4;Around the Horn;Thomas Hardy;120 Hanover Sq.;London;WA1 1DP;UK} \
+{5;Berglunds snabbköp;Christina Berglund;Berguvsvägen 8;Luleå;S-958 22;Sweden}] \n] a.csv
+makeFile [join [list \
+{CustomerID;CustomerName;ContactName;Address;City;PostalCode;Country} \
+{89;White Clover Markets;Karl Jablonski;305 - 14th Ave. S. Suite 3B;Seattle;98128;USA} \
+{90;Wilman Kala;Matti Karttunen;Keskuskatu 45;Helsinki;21240;Finland} \
+{91;Wolski;Zbyszek;ul. Filtrowa 68;Walla;01-012;Poland}] \n] b.csv
+makeFile [join [list \
+{OrderID;CustomerID;OrderDate} \
+{10308;2;1996-09-18} \
+{10309;4;1996-09-19} \
+{10310;77;1996-09-20}] \n] c.csv
+makeFile [join [list \
+{SupplierID;SupplierName;ContactName;Address;City;PostalCode;Country} \
+{1;Exotic Liquid;Charlotte Cooper;49 Gilbert St.;London;EC1 4SD;UK} \
+{2;New Orleans Cajun Delights;Shelley Burke;P.O. Box 78934;New Orleans;70117;USA} \
+{3;Grandma Kelly's Homestead;Regina Murphy;707 Oxford Rd.;Ann Arbor;48104;USA}] \n] d.csv
+
+test sql-methods-1.1 {} -setup {
+    set res {}
+} -body {
+    set db [DB new]
+    $db readTable Customers [file join [configure -tmpdir] a.csv]
+    # SELECT Country FROM Customers
+    lappend res [$db select Customers Country]
+    lappend res [$db eval {SELECT DISTINCT Country FROM Customers}]
+    lappend res [$db eval {SELECT COUNT(DISTINCT Country) FROM Customers}]
+    lappend res [$db eval {SELECT CustomerID FROM Customers WHERE Country='Mexico'}]
+    lappend res [$db eval {SELECT CustomerID FROM Customers WHERE CustomerID=1}]
+    lappend res [$db eval {SELECT CustomerID FROM Customers WHERE Country='Germany' AND City='Berlin'}]
+    lappend res [$db eval {SELECT CustomerID FROM Customers WHERE City='Berlin' OR City='München'}]
+    lappend res [$db eval {SELECT CustomerID FROM Customers WHERE NOT Country='Germany'}]
+    lappend res [$db eval {SELECT CustomerID FROM Customers ORDER BY Country}]
+    lappend res [$db eval {SELECT CustomerID FROM Customers ORDER BY Country DESC}]
+    $db destroy
+    set db [DB new]
+    $db readTable Customers [file join [configure -tmpdir] b.csv]
+    # INSERT INTO Customers (CustomerName, ContactName, Address, City, PostalCode, Country)
+    # VALUES ('Cardinal', 'Tom B. Erichsen', 'Skagen 21', 'Stavanger', '4006', 'Norway');
+    set columns {CustomerName,ContactName,Address,City,PostalCode,Country}
+    set values  {'Cardinal','Tom B. Erichsen','Skagen 21','Stavanger',4006,'Norway'}
+    $db insert Customers $columns $values
+    lappend res [$db select Customers Country]
+    set res
+} -cleanup {
+    catch {$db destroy}
+    log::lvSuppressLE i 1
+} -result {{Germany Mexico Mexico UK Sweden} {Germany Mexico UK Sweden} 4 {2 3} 1 1 1 {2 3 4 5} {1 2 3 5 4} {4 5 2 3 1} {USA Finland Poland Norway}}
+
+test sql-methods-1.2 {} -setup {
+    set res {}
+} -body {
+    set db [DB new]
+    $db readTable Customers [file join [configure -tmpdir] a.csv]
+    $db readTable Orders [file join [configure -tmpdir] c.csv]
+    lappend res [$db dict {
+        SELECT Orders.OrderID, Customers.CustomerName, Orders.OrderDate
+        FROM Orders
+        INNER JOIN Customers ON Orders.CustomerID=Customers.CustomerID
+    }]
+    lappend res [$db dict {
+        SELECT Orders.OrderID, Customers.CustomerName, Orders.OrderDate
+        FROM Orders
+        LEFT JOIN Customers ON Orders.CustomerID=Customers.CustomerID
+    }]
+    set res
+} -cleanup {
+    catch {$db destroy}
+} -result {{* {OrderID CustomerName OrderDate} 1 {10308 {Ana Trujillo Emparedados y helados} 1996-09-18} 2 {10309 {Around the Horn} 1996-09-19}} {* {OrderID CustomerName OrderDate} 1 {10308 {Ana Trujillo Emparedados y helados} 1996-09-18} 2 {10309 {Around the Horn} 1996-09-19} 3 {10310 {} 1996-09-20}}}
+
+test sql-methods-1.3 {} -setup {
+    set res {}
+} -body {
+    set db [DB new]
+    $db readTable Customers [file join [configure -tmpdir] a.csv]
+    $db readTable Suppliers [file join [configure -tmpdir] d.csv]
+    lappend res [$db eval {
+        SELECT City FROM Customers
+        UNION
+        SELECT City FROM Suppliers
+        ORDER BY City;
+    }]
+    lappend res [$db eval {
+        SELECT City FROM Customers
+        UNION ALL
+        SELECT City FROM Suppliers
+        ORDER BY City;
+    }]
+    set res
+} -cleanup {
+    catch {$db destroy}
+} -result {{{Ann Arbor} Berlin London Luleå {México D.F.} {New Orleans}} {{Ann Arbor} Berlin London London Luleå {México D.F.} {México D.F.} {New Orleans}}}
+
+cleanupTests

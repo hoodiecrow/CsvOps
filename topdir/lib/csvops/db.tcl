@@ -1,6 +1,18 @@
 
+proc ::withHandle {handleName openCmd body} {
+    upvar 1 $handleName f
+    try {
+        uplevel 1 $openCmd
+    } on ok f {
+        uplevel 1 $body
+    } finally {
+        catch {close [set f]}
+    }
+}
+
 package require csv
 package require tdom
+package require sqlite3
 
 oo::class create DB {
     variable tally
@@ -10,7 +22,7 @@ oo::class create DB {
     }
 
     destructor {
-        [self namespace]::dbcmd close
+        dbcmd close
     }
 
     forward eval dbcmd eval
@@ -33,34 +45,31 @@ oo::class create DB {
         # option sets the return value to be a result dict, otherwise the
         # return value will be a result set.
         if {[lindex $args 0] eq "-dict"} {
-            set columns [join [lassign $args - tableid] ,]
+            set args [lassign $args -]
             set fn {my dict}
         } else {
-            set columns [join [lassign $args tableid] ,]
             set fn {dbcmd eval}
         }
+        set columns [lassign $args tableid]
         if {$columns eq {}} {
             set columns *
         }
-        {*}$fn [format {SELECT %s FROM %s} $columns $tableid]
+        {*}$fn [format {SELECT %s FROM %s} [join $columns ,] $tableid]
     }
 
     method insert {tableid args} {
-        log::logMsg [info level 0]
         # Insert a row into a table given table name, optionally a list of
         # column names, and a list of values.
         set argc [llength $args]
         lassign [lmap arg [lreverse $args] {join $arg ,}] values columns
-        switch $argc {
-            1 {
-                log::logMsg [list dbcmd eval [format {INSERT INTO %s VALUES (%s)} $tableid $values]]
-                dbcmd eval [format {INSERT INTO %s VALUES (%s)} $tableid $values]
-            }
-            2 {dbcmd eval [format {INSERT INTO %s (%s) VALUES (%s)} $tableid $columns $values]}
+        set sql [switch $argc {
+            1 {format {INSERT INTO %s VALUES (%s)} $tableid $values}
+            2 {format {INSERT INTO %s (%s) VALUES (%s)} $tableid $columns $values}
             default {
                 return -code error [mc {wrong#number "%s"} {insert tableid ?columns? values}]
             }
-        }
+        }]
+        dbcmd eval $sql
     }
 
     method dict args {
@@ -89,27 +98,20 @@ oo::class create DB {
     }
 
     method readTable {tableid filename} {
-        # Create and populate a table from a file.
-        try {
-            open $filename
-        } on ok f {
+        # Create and populate a table from a file. The first row is expected to
+        # be field labels.
+        withHandle f {open $filename} {
             set rows [lassign [my GetRows $f] fields]
             my create $tableid {*}$fields
             my fillTable $tableid {*}$rows
             return $fields
-        } finally {
-            catch {chan close $f}
         }
     }
 
     method loadTable {tableid filename} {
         # Populate an existing table from a file.
-        try {
-            open $filename
-        } on ok f {
+        withHandle f {open $filename} {
             my fillTable $tableid {*}[my GetRows $f]
-        } finally {
-            catch {chan close $f}
         }
     }
 
@@ -125,19 +127,15 @@ oo::class create DB {
         $o option -values flag 1
         variable dumpTableOpts
         lassign [$o extract [self namespace]::dumpTableOpts {*}$args] tableid filename 
-        try {
-            open $filename w
-        } on ok f {
+        withHandle f {open $filename w} {
             set t [my dict -values -all $tableid]
             set rows [lassign $t fields]
             if {!$dumpTableOpts(-values)} {
                 puts $f [::csv::join $fields $::options(-oseparator)]
             }
             puts -nonewline $f [::csv::joinlist [my OutputFilterList $rows] $::options(-oseparator)]
-        } finally {
-            catch {chan close $f}
-            $o destroy
         }
+        $o destroy
     }
 
     method OutputFilterList {rows args} {
@@ -186,11 +184,9 @@ oo::class create DB {
         if {$::options(-alternate)} {
             lappend splitcmd -alternate
         }
-            log::logMsg \$splitcmd=$splitcmd
+        lappend splitcmd {} $::options(-separator) $::options(-delimiter)
         while {[gets $channel line] >= 0} {
-            set data [{*}$splitcmd $line \
-                $::options(-separator) $::options(-delimiter)]
-            log::logMsg \$data=$data
+            set data [{*}[lreplace $splitcmd end-2 end-2 $line]]
             lappend result [my InputFilterRow $data]
         }
         return $result

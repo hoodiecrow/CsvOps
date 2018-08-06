@@ -1,13 +1,4 @@
-package provide csvops 1.0
-
-package require log
-
-apply {args {
-    set dir [file dirname [info script]]
-    foreach arg $args {
-        source -encoding utf-8 [file join $dir $arg]
-    }
-}} policy.tcl safe.tcl db.tcl
+package require optionhandler
 
 oo::object create csvops
 
@@ -40,9 +31,20 @@ oo::objdefine csvops {
                 lappend preamble {package require log}
                 # Note: seems impossible to load modules through the tm
                 # mechanism in a safe base interpreter.
-                my RunSafe {*}$preamble $script
+                set int [::safe::interpCreate]
+                Script_PolicyInit $int
             } else {
-                my RunOpen {*}$preamble $script
+                set int {}
+            }
+            try {
+                foreach arg $preamble {
+                    interp eval $int $arg
+                }
+                interp eval $int $script
+            } on error msg {
+                my Panic [mc {Failure %s} $msg]
+            } finally {
+                catch {::safe::interpDelete $int}
             }
         }
     }
@@ -54,27 +56,6 @@ oo::objdefine csvops {
             format "%s;exit" [::fileutil::cat $filename]
         } on error msg {
             my Panic [mc {Load %s} $msg]
-        }
-    }
-
-    method RunOpen args {
-        foreach arg $args {
-            uplevel #0 $arg
-        }
-    }
-
-    method RunSafe args {
-        set int [::safe::interpCreate]
-        Script_PolicyInit $int
-        foreach arg [lrange $args 0 end-1] {
-            $int eval $arg
-        }
-        try {
-            $int eval [lindex $args end] 
-        } on error msg {
-            my Panic [mc {Failure %s} $msg]
-        } finally {
-            ::safe::interpDelete $int
         }
     }
 

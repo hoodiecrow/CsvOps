@@ -8,4 +8,4 @@
 # script is sourced, the variable $dir must contain the
 # full path name of this file's directory.
 
-package ifneeded csvops 1.0 [list source [file join $dir csvops.tcl]]
+package ifneeded csvops 1.0 [list source [file join $dir csvops _.tcl]]
