@@ -10,10 +10,6 @@ proc ::withHandle {handleName openCmd body} {
     }
 }
 
-package require csv
-package require tdom
-package require sqlite3
-
 oo::class create DB {
     variable tally
 

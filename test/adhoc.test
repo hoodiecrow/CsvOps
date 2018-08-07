@@ -22,7 +22,7 @@ loadTestedCommands
 
 #source [file join H:/starkits csvops.kit]
 
-set ::argv {} ; package require csvops
+package require csvops
 
 file copy -force [file join [configure -testdir] eval.csv] [configure -tmpdir]
 

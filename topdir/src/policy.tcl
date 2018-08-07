@@ -33,4 +33,5 @@ proc Script_PolicyInit slave {
         interp eval $slave [list set ssrc [file join $::starkit::topdir lib csvops ssrc]]
     }
 
+    return $slave
 }
