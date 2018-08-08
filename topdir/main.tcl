@@ -14,5 +14,4 @@ if no {
 }
 
 $project reset
-
 $project main {*}$argv

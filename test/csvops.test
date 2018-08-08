@@ -4,18 +4,12 @@ package require tcltest
 
 ::tcltest::testConstraint mute 0
 
-::tcltest::loadTestedCommands
+catch {source ../build.tcl}
+package require log
 
 file copy -force [file join [::tcltest::configure -testdir] eval.csv] [::tcltest::configure -tmpdir]
 file copy -force [file join [::tcltest::configure -testdir] eval2.csv] [::tcltest::configure -tmpdir]
 
-set STARKITS H:/starkits
-set SANDBOX H:/code
-if {![file exists $STARKITS]} {
-    set STARKITS [file normalize [file join ~ starkits]]
-    set SANDBOX [file normalize [file join ~ code]]
-}
-set EXEC [list ::exec tclsh [file join $STARKITS csvops.kit]]
 set FOO_CO [file join [::tcltest::configure -tmpdir] foo.co]
 
 ::tcltest::test system-1.0 {Changed running without filename from error to just open console.} -constraints {mute} -setup {
