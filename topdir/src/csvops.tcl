@@ -20,8 +20,8 @@ oo::objdefine csvops {
         } else {
             set int [my GetInterp $::options(-safe)]
             set preamble {
-                {package require fileutil}
-                {package require log}
+                package require fileutil
+                package require log
             }
             set script [my GetScript $filename]
             my Run $int $preamble $script
@@ -30,9 +30,7 @@ oo::objdefine csvops {
 
     method Run {int preamble script} {
         try {
-            foreach arg $preamble {
-                interp eval $int $arg
-            }
+            interp eval $int $preamble
             interp eval $int $script
         } on error msg {
             my Panic [mc {Failure %s} $msg]
@@ -51,9 +49,13 @@ oo::objdefine csvops {
         }
     }
 
-    method GetScript {filename {default {package require tkcon;tkcon show}}} {
+    method GetScript {filename {default tkcon}} {
         if {$filename eq {}} {
-            return $default
+            if {$default eq "tkcon"} {
+                return {package require tkcon;tkcon show}
+            } else {
+                return $default
+            }
         } else {
             return [my LoadScript $filename]
         }
@@ -63,7 +65,7 @@ oo::objdefine csvops {
         # TODO see if exit can be dispensed with
         try {
             cd [file dirname $filename]
-            format "%s;exit" [::fileutil::cat $filename]
+            ::fileutil::cat $filename
         } on error msg {
             my Panic [mc {Load %s} $msg]
         }
